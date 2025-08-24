@@ -110,7 +110,7 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 角色列表标签
-        list_label = wx.StaticText(parent, label="语音角色列表:")
+        list_label = wx.StaticText(parent, label="语音角色：")
         sizer.Add(list_label, 0, wx.LEFT | wx.TOP, 5)
         
         # 角色列表
@@ -143,38 +143,42 @@ class MainFrame(wx.Frame):
         # 参数控制区域
         param_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        # 语速控制
+        # 语速控制 - 使用更好的无障碍支持
+        speed_sizer = wx.BoxSizer(wx.HORIZONTAL)
         speed_label = wx.StaticText(parent, label="语速:")
-        self.speed_ctrl = wx.SpinCtrlDouble(
+        self.speed_text = wx.TextCtrl(
             parent, 
-            min=0.5, 
-            max=2.0, 
-            inc=0.1,
-            style=wx.SP_ARROW_KEYS | wx.TE_PROCESS_ENTER
+            value="1.0", 
+            size=(60, -1),
+            style=wx.TE_PROCESS_ENTER
         )
-        self.speed_ctrl.SetValue(1.0)
-        self.speed_ctrl.Bind(wx.EVT_SPINCTRLDOUBLE, self.on_speed_changed)
+        self.speed_text.Bind(wx.EVT_TEXT_ENTER, self.on_speed_changed)
+        self.speed_text.Bind(wx.EVT_KILL_FOCUS, self.on_speed_changed)
         
-        # 音量控制
+        speed_sizer.Add(speed_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        speed_sizer.Add(self.speed_text, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        # 音量控制 - 使用更好的无障碍支持
+        volume_sizer = wx.BoxSizer(wx.HORIZONTAL)
         volume_label = wx.StaticText(parent, label="音量:")
-        self.volume_ctrl = wx.SpinCtrlDouble(
+        self.volume_text = wx.TextCtrl(
             parent, 
-            min=0.5, 
-            max=2.0, 
-            inc=0.1,
-            style=wx.SP_ARROW_KEYS | wx.TE_PROCESS_ENTER
+            value="1.0", 
+            size=(60, -1),
+            style=wx.TE_PROCESS_ENTER
         )
-        self.volume_ctrl.SetValue(1.0)
-        self.volume_ctrl.Bind(wx.EVT_SPINCTRLDOUBLE, self.on_volume_changed)
+        self.volume_text.Bind(wx.EVT_TEXT_ENTER, self.on_volume_changed)
+        self.volume_text.Bind(wx.EVT_KILL_FOCUS, self.on_volume_changed)
+        
+        volume_sizer.Add(volume_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        volume_sizer.Add(self.volume_text, 0, wx.ALIGN_CENTER_VERTICAL)
         
         # 试听按钮
         self.preview_button = wx.Button(parent, label="试听选中角色")
         self.preview_button.Bind(wx.EVT_BUTTON, self.on_preview_button)
         
-        param_sizer.Add(speed_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        param_sizer.Add(self.speed_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
-        param_sizer.Add(volume_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        param_sizer.Add(self.volume_ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
+        param_sizer.Add(speed_sizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
+        param_sizer.Add(volume_sizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
         param_sizer.Add(self.preview_button, 0, wx.ALIGN_CENTER_VERTICAL)
         
         sizer.Add(param_sizer, 0, wx.EXPAND | wx.TOP, 10)
@@ -260,10 +264,10 @@ class MainFrame(wx.Frame):
             # 为控件设置无障碍名称
             self.accessibility.set_control_name(self.provider_combo, "方案选择")
             self.accessibility.set_control_name(self.refresh_button, "刷新语音角色按钮")
-            self.accessibility.set_control_name(self.role_list, "语音角色列表")
+            self.accessibility.set_control_name(self.role_list, "语音角色")
             self.accessibility.set_control_name(self.preview_text, "语音试听文本")
-            self.accessibility.set_control_name(self.speed_ctrl, "语速控制")
-            self.accessibility.set_control_name(self.volume_ctrl, "音量控制")
+            self.accessibility.set_control_name(self.speed_text, "语速控制")
+            self.accessibility.set_control_name(self.volume_text, "音量控制")
             self.accessibility.set_control_name(self.preview_button, "试听按钮")
             self.accessibility.set_control_name(self.select_all_button, "全选按钮")
             self.accessibility.set_control_name(self.select_inverse_button, "反选按钮")
@@ -281,9 +285,19 @@ class MainFrame(wx.Frame):
             
             for provider in providers:
                 if provider.get('enabled', True):
-                    name = provider.get('custom_name', provider.get('type', ''))
-                    if name:
-                        provider_names.append(name)
+                    custom_name = provider.get('custom_name', '')
+                    provider_type = provider.get('type', '')
+                    
+                    if custom_name and provider_type:
+                        name = f"{custom_name} - {provider_type}"
+                    elif custom_name:
+                        name = custom_name
+                    elif provider_type:
+                        name = provider_type
+                    else:
+                        name = "未知提供商"
+                    
+                    provider_names.append(name)
             
             self.provider_combo.SetItems(provider_names)
             if provider_names:
@@ -302,11 +316,38 @@ class MainFrame(wx.Frame):
             self.current_roles = []
             self.selected_roles = set()
             
-            # 更新按钮状态
-            self._update_button_states()
+            # 添加状态提示
+            self.role_list.Append("正在获取音色...")
             
+            # 获取当前选择的提供商
+            provider_name = self.provider_combo.GetValue()
+            if not provider_name:
+                # 更新按钮状态
+                self._update_button_states()
+                return
+            
+            # 获取提供商配置
+            provider = self.provider_manager.get_provider_by_name(provider_name)
+            if not provider:
+                wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
+                # 更新按钮状态
+                self._update_button_states()
+                return
+            
+            # 禁用刷新按钮，显示进度
+            self.refresh_button.Enable(False)
+            self.refresh_button.SetLabel("正在刷新...")
+            
+            # 在后台线程中刷新角色
+            threading.Thread(
+                target=self._refresh_roles_thread,
+                args=(provider,),
+                daemon=True
+            ).start()
+                
         except Exception as e:
             wx.MessageBox(f"切换提供商失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            self._update_button_states()
     
     def on_refresh_roles(self, event):
         """刷新角色列表"""
@@ -322,6 +363,14 @@ class MainFrame(wx.Frame):
             if not provider:
                 wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
                 return
+            
+            # 清空当前角色列表
+            self.role_list.Clear()
+            self.current_roles = []
+            self.selected_roles = set()
+            
+            # 添加状态提示
+            self.role_list.Append("正在获取音色...")
             
             # 禁用刷新按钮，显示进度
             self.refresh_button.Enable(False)
@@ -364,20 +413,22 @@ class MainFrame(wx.Frame):
             wx.MessageBox(f"获取角色列表失败: {event.error}", "错误", wx.OK | wx.ICON_ERROR)
             return
         
+        # 过滤掉"使用参考音频"项
+        filtered_roles = [role for role in event.roles if role != "使用参考音频"]
+        
         # 更新角色列表
-        self.current_roles = event.roles
+        self.current_roles = filtered_roles
         self.role_list.Clear()
         self.selected_roles = set()
         
-        # 添加角色到列表
-        for role in event.roles:
+        # 添加过滤后的角色到列表
+        for role in filtered_roles:
             self.role_list.Append(role)
         
         # 更新按钮状态
         self._update_button_states()
         
-        # 显示成功消息
-        wx.MessageBox(f"成功获取到 {len(event.roles)} 个语音角色", "成功", wx.OK | wx.ICON_INFORMATION)
+        # 成功时不显示弹窗，直接显示结果
     
     def on_role_selected(self, event):
         """角色选择事件"""
@@ -415,13 +466,29 @@ class MainFrame(wx.Frame):
     
     def on_speed_changed(self, event):
         """语速改变事件"""
-        # 可以在这里添加实时预览功能
-        pass
+        try:
+            # 验证输入值
+            value = float(self.speed_text.GetValue())
+            # 限制范围
+            value = max(0.5, min(2.0, value))
+            # 更新显示
+            self.speed_text.SetValue(str(value))
+        except ValueError:
+            # 如果输入无效，恢复为默认值
+            self.speed_text.SetValue("1.0")
     
     def on_volume_changed(self, event):
         """音量改变事件"""
-        # 可以在这里添加实时预览功能
-        pass
+        try:
+            # 验证输入值
+            value = float(self.volume_text.GetValue())
+            # 限制范围
+            value = max(0.5, min(2.0, value))
+            # 更新显示
+            self.volume_text.SetValue(str(value))
+        except ValueError:
+            # 如果输入无效，恢复为默认值
+            self.volume_text.SetValue("1.0")
     
     def on_preview_button(self, event):
         """试听按钮事件"""
@@ -481,8 +548,8 @@ class MainFrame(wx.Frame):
                 json_data = self.json_exporter.generate_json(
                     self.selected_roles,
                     provider,
-                    self.speed_ctrl.GetValue(),
-                    self.volume_ctrl.GetValue()
+                    float(self.speed_text.GetValue()),
+                    float(self.volume_text.GetValue())
                 )
                 
                 # 保存文件
@@ -499,10 +566,28 @@ class MainFrame(wx.Frame):
         try:
             from ui.provider_dialog import ProviderDialog
             
+            # 保存当前选择的提供商
+            current_provider = self.provider_combo.GetValue()
+            
             dialog = ProviderDialog(self)
-            if dialog.ShowModal() == wx.ID_OK:
-                # 重新加载配置
-                self._load_config()
+            # 无论点击确定还是取消，都重新加载配置
+            dialog.ShowModal()
+            
+            # 重新加载配置以更新提供商列表
+            self._load_config()
+            
+            # 尝试恢复之前选择的提供商
+            if current_provider:
+                # 查找恢复的提供商
+                index = self.provider_combo.FindString(current_provider)
+                if index != wx.NOT_FOUND:
+                    self.provider_combo.SetSelection(index)
+                else:
+                    # 如果找不到之前的提供商，选择第一个
+                    if self.provider_combo.GetCount() > 0:
+                        self.provider_combo.SetSelection(0)
+                        # 触发提供商改变事件以加载角色
+                        self.on_provider_changed(None)
             
             dialog.Destroy()
             
@@ -568,8 +653,8 @@ class MainFrame(wx.Frame):
             
             # 获取试听参数
             text = self.preview_text.GetValue()
-            speed = self.speed_ctrl.GetValue()
-            volume = self.volume_ctrl.GetValue()
+            speed = float(self.speed_text.GetValue())
+            volume = float(self.volume_text.GetValue())
             
             if not text.strip():
                 wx.MessageBox("请输入试听文本", "提示", wx.OK | wx.ICON_INFORMATION)

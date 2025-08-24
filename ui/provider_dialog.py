@@ -106,6 +106,9 @@ class ProviderDialog(wx.Dialog):
         self.scan_button = wx.Button(parent, label="搜索局域网")
         self.scan_button.Bind(wx.EVT_BUTTON, self.on_scan_network)
         
+        # 确定按钮
+        self.ok_button = wx.Button(parent, label="确定", id=wx.ID_OK)
+        
         # 关闭按钮
         self.close_button = wx.Button(parent, label="关闭", id=wx.ID_CANCEL)
         
@@ -114,7 +117,9 @@ class ProviderDialog(wx.Dialog):
         sizer.Add(self.edit_button, 0, wx.RIGHT, 10)
         sizer.Add(self.delete_button, 0, wx.RIGHT, 10)
         sizer.Add(self.scan_button, 0, wx.RIGHT, 10)
-        sizer.Add(self.close_button, 1, wx.EXPAND)
+        sizer.AddStretchSpacer(1)
+        sizer.Add(self.ok_button, 0, wx.RIGHT, 10)
+        sizer.Add(self.close_button, 0)
         
         return sizer
     
@@ -298,7 +303,7 @@ class ProviderDialog(wx.Dialog):
         self._restore_scan_button()
         
         if not servers:
-            wx.MessageBox("未找到可用的index TTS服务器", "搜索结果", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox("未找到可用的index_tts服务器", "搜索结果", wx.OK | wx.ICON_INFORMATION)
             return
         
         # 如果只有一个服务器，直接创建提供商

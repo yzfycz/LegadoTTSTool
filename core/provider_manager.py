@@ -78,7 +78,10 @@ class ProviderManager:
             custom_name = provider.get('custom_name', '')
             provider_type = provider.get('type', '')
             
-            if custom_name == name or (not custom_name and provider_type == name):
+            # 检查完整名称格式 "custom_name - type"
+            full_name = f"{custom_name} - {provider_type}"
+            
+            if custom_name == name or provider_type == name or full_name == name:
                 return provider
         return None
     

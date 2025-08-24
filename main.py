@@ -50,6 +50,23 @@ class LegadoTTSApp(wx.App):
             wx.MessageBox(f"程序初始化失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
             return False
     
+    def OnExit(self):
+        """应用程序退出时的清理工作"""
+        try:
+            print("应用程序正在退出...")
+            # 清理资源
+            if hasattr(self, 'provider_manager'):
+                self.provider_manager = None
+            
+            if hasattr(self, 'frame'):
+                self.frame = None
+            
+        except Exception as e:
+            print(f"退出清理失败: {e}")
+        
+        # 调用父类的退出方法
+        return super().OnExit()
+    
     def _create_directories(self):
         """创建必要的目录结构"""
         directories = [
@@ -73,6 +90,7 @@ class LegadoTTSApp(wx.App):
 
 def main():
     """主函数"""
+    app = None
     try:
         # 创建应用程序实例
         app = LegadoTTSApp()
@@ -84,7 +102,34 @@ def main():
         print("程序被用户中断")
     except Exception as e:
         print(f"程序运行错误: {e}")
-        wx.MessageBox(f"程序运行错误: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+        try:
+            wx.MessageBox(f"程序运行错误: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+        except:
+            pass
+    finally:
+        # 清理资源 - 使用更安全的方式
+        if app:
+            try:
+                # 先尝试退出主循环
+                if app.IsMainLoopRunning():
+                    app.ExitMainLoop()
+                
+                # 延迟一下再销毁应用
+                import time
+                time.sleep(0.1)
+                
+                # 销毁应用
+                app.Destroy()
+            except RecursionError:
+                print("检测到递归错误，跳过应用销毁")
+            except Exception as e:
+                print(f"应用销毁失败: {e}")
+            finally:
+                # 强制退出所有wxPython窗口
+                try:
+                    wx.GetApp().Exit()
+                except:
+                    pass
 
 if __name__ == "__main__":
     main()

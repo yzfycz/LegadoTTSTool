@@ -31,7 +31,7 @@ class ConfigDialog(wx.Dialog):
         self.config_data = {}
         
         # 支持的提供商类型
-        self.provider_types = ["index TTS"]
+        self.provider_types = ["index_tts"]
         
         # 初始化界面
         self._init_ui()
@@ -41,6 +41,10 @@ class ConfigDialog(wx.Dialog):
             self._load_provider_config()
         elif server_data:
             self._load_server_config()
+        else:
+            # 设置默认值
+            self.type_combo.SetValue("index_tts")
+            self.on_type_changed(None)
         
         # 居中显示
         self.Centre()
@@ -140,7 +144,7 @@ class ConfigDialog(wx.Dialog):
         """加载提供商配置"""
         try:
             # 设置提供商类型
-            provider_type = self.provider.get('type', 'index TTS')
+            provider_type = self.provider.get('type', 'index_tts')
             if provider_type in self.provider_types:
                 self.type_combo.SetValue(provider_type)
             
@@ -158,7 +162,7 @@ class ConfigDialog(wx.Dialog):
         """加载服务器配置"""
         try:
             # 设置提供商类型
-            self.type_combo.SetValue('index TTS')
+            self.type_combo.SetValue('index_tts')
             
             # 设置服务器地址
             if hasattr(self, 'server_address_text'):
@@ -182,8 +186,13 @@ class ConfigDialog(wx.Dialog):
         # 获取选择的类型
         provider_type = self.type_combo.GetValue()
         
+        # 如果没有选择的类型，使用默认类型
+        if not provider_type:
+            provider_type = "index_tts"
+            self.type_combo.SetValue(provider_type)
+        
         # 根据类型创建配置界面
-        if provider_type == "index TTS":
+        if provider_type == "index_tts":
             self._create_index_tts_config()
         else:
             self._create_generic_config()
@@ -191,6 +200,10 @@ class ConfigDialog(wx.Dialog):
         # 重新布局
         self.config_panel.Layout()
         self.config_panel.Refresh()
+        
+        # 如果是编辑模式，重新加载配置
+        if self.provider:
+            self._load_dynamic_config()
     
     def _create_index_tts_config(self):
         """创建index TTS配置界面"""
@@ -284,7 +297,7 @@ class ConfigDialog(wx.Dialog):
         """加载动态配置"""
         provider_type = self.type_combo.GetValue()
         
-        if provider_type == "index TTS":
+        if provider_type == "index_tts":
             # 加载index TTS配置
             if hasattr(self, 'server_address_text'):
                 self.server_address_text.SetValue(self.provider.get('server_address', ''))
@@ -398,7 +411,7 @@ class ConfigDialog(wx.Dialog):
             return False
         
         # 根据类型验证配置
-        if provider_type == "index TTS":
+        if provider_type == "index_tts":
             return self._validate_index_tts_config()
         else:
             return self._validate_generic_config()
@@ -475,7 +488,7 @@ class ConfigDialog(wx.Dialog):
         
         # 根据类型添加配置
         provider_type = config_data['type']
-        if provider_type == "index TTS":
+        if provider_type == "index_tts":
             config_data.update({
                 'server_address': self.server_address_text.GetValue().strip(),
                 'web_port': int(self.web_port_text.GetValue().strip()),

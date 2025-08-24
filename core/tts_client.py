@@ -51,26 +51,59 @@ class TTSClient:
             if not server_address:
                 raise Exception("服务器地址不能为空")
             
-            # 创建Gradio客户端
-            client = Client(f"http://{server_address}:{web_port}/")
+            # 重定向标准输出以避免gradio_client的Unicode输出问题
+            import sys
+            import io
+            old_stdout = sys.stdout
+            # 使用StringIO捕获输出
+            sys.stdout = io.StringIO()
             
-            # 调用API获取角色列表
+            try:
+                # 创建Gradio客户端
+                client = Client(f"http://{server_address}:{web_port}/")
+            finally:
+                # 恢复标准输出
+                sys.stdout = old_stdout
+            
+            # 调用API获取角色列表 - 不传递参数
             result = client.predict(api_name="/change_choices")
             
-            # 验证结果
+            # 验证结果并解析不同格式
+            roles = []
+            
             if isinstance(result, list):
-                # 过滤和清理角色名称
-                roles = []
+                # 直接是列表格式
                 for role in result:
                     if isinstance(role, str) and role.strip():
                         roles.append(role.strip())
-                
-                print(f"成功获取到 {len(roles)} 个角色")
-                return roles
+            
+            elif isinstance(result, dict):
+                # 字典格式，包含choices键
+                if 'choices' in result and isinstance(result['choices'], list):
+                    choices = result['choices']
+                    # choices可能是二维数组 [display_name, value]
+                    for choice in choices:
+                        if isinstance(choice, list) and len(choice) > 0:
+                            # 取第一个元素作为显示名称
+                            role_name = choice[0]
+                            if isinstance(role_name, str) and role_name.strip():
+                                roles.append(role_name.strip())
+                        elif isinstance(choice, str) and choice.strip():
+                            roles.append(choice.strip())
+                else:
+                    print(f"字典中没有找到choices键: {result.keys()}")
+                    raise Exception("API返回的字典格式不正确")
             else:
+                # 不支持的格式
+                print(f"API返回类型: {type(result)}")
+                print(f"API返回内容: {result}")
                 raise Exception(f"API返回格式错误: {type(result)}")
+            
+            print(f"获取到 {len(roles)} 个角色")
+            return roles
                 
         except Exception as e:
+            print(f"获取index TTS角色失败详情: {e}")
             raise Exception(f"获取index TTS角色失败: {e}")
     
     def _get_generic_roles(self, provider: Dict[str, Any]) -> List[str]:

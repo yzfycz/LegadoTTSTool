@@ -62,7 +62,7 @@ class AccessibilityUtils:
                 if app:
                     # 启用无障碍支持
                     app.SetUseBestVisual(True)
-                    app.SetAccessibilityMode(True)
+                    # 注意：SetAccessibilityMode方法在wxPython中不存在
             
             # 设置系统级无障碍支持
             self._setup_system_accessibility()
