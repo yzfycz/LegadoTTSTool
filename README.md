@@ -17,12 +17,13 @@
 
 - Python 3.8+
 - Windows 10/11
+- 支持的TTS服务（如index TTS）
 
 ### 安装步骤
 
 1. **克隆仓库**
    ```bash
-   git clone https://github.com/yourusername/LegadoTTSTool.git
+   git clone https://github.com/yzfycz/LegadoTTSTool.git
    cd LegadoTTSTool
    ```
 
@@ -34,6 +35,11 @@
 3. **运行程序**
    ```bash
    python main.py
+   ```
+   
+   或者使用测试启动脚本：
+   ```bash
+   python run.py
    ```
 
 ### 依赖库
@@ -75,9 +81,9 @@
 ```
 LegadoTTSTool/
 ├── main.py                 # 主程序入口
+├── run.py                  # 测试启动脚本
 ├── config/                 # 配置文件目录
-│   ├── providers.json      # 提供商配置
-│   └── settings.json       # 程序设置
+│   └── providers.json      # 提供商配置
 ├── ui/                     # 界面模块
 │   ├── main_frame.py       # 主界面
 │   ├── provider_dialog.py  # 提供商管理对话框
@@ -89,10 +95,59 @@ LegadoTTSTool/
 │   └── json_exporter.py    # JSON导出器
 ├── utils/                  # 工具模块
 │   ├── accessibility.py    # 无障碍工具
-│   ├── file_utils.py       # 文件操作工具
-│   └── network_utils.py    # 网络工具
+│   └── file_utils.py       # 文件操作工具
+├── requirements.txt        # Python依赖
+├── .gitignore             # Git忽略文件
 └── README.md              # 项目说明文档
 ```
+
+## 📊 开发状态
+
+### ✅ 已完成功能
+
+- **核心架构**
+  - 模块化代码结构
+  - 完整的异常处理
+  - 配置文件管理
+  
+- **用户界面**
+  - 主界面框架
+  - 提供商管理对话框
+  - 动态配置界面
+  - 菜单系统
+  
+- **功能模块**
+  - 提供商管理器
+  - 网络扫描器
+  - TTS客户端
+  - JSON导出器
+  
+- **无障碍支持**
+  - 键盘导航
+  - 屏幕阅读器支持
+  - 高对比度模式
+  
+- **index TTS支持**
+  - 角色列表获取
+  - 语音试听
+  - 局域网搜索
+  
+### 🔄 正在开发
+
+- **界面完善**
+  - 焦点管理优化
+  - 控件标签完善
+  - 错误处理优化
+  
+- **功能测试**
+  - 单元测试
+  - 集成测试
+  - 无障碍测试
+  
+- **文档完善**
+  - 用户手册
+  - 开发文档
+  - API文档
 
 ## 🎯 支持的TTS提供商
 

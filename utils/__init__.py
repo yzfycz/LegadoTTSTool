@@ -1,0 +1,1 @@
+# LegadoTTSTool - 语音合成角色导出工具
