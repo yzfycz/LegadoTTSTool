@@ -14,6 +14,9 @@ from core.provider_manager import ProviderManager
 from core.network_scanner import NetworkScanner
 from ui.config_dialog import ConfigDialog
 
+# 创建自定义事件
+ProviderUpdateEvent, EVT_PROVIDER_UPDATE = wx.lib.newevent.NewEvent()
+
 class ProviderDialog(wx.Dialog):
     """方案管理对话框"""
     
@@ -39,6 +42,14 @@ class ProviderDialog(wx.Dialog):
         
         # 居中显示
         self.Centre()
+    
+    def _send_provider_update_event(self):
+        """发送方案更新事件"""
+        try:
+            event = ProviderUpdateEvent()
+            wx.PostEvent(self.GetParent(), event)
+        except Exception as e:
+            print(f"发送方案更新事件失败: {e}")
     
     def _init_ui(self):
         """初始化用户界面"""
@@ -193,6 +204,9 @@ class ProviderDialog(wx.Dialog):
                 # 重新加载列表
                 self._load_providers()
                 
+                # 发送方案更新事件
+                self._send_provider_update_event()
+                
                 wx.MessageBox("方案创建成功", "成功", wx.OK | wx.ICON_INFORMATION)
             
             dialog.Destroy()
@@ -219,6 +233,9 @@ class ProviderDialog(wx.Dialog):
                 
                 # 重新加载列表
                 self._load_providers()
+                
+                # 发送方案更新事件
+                self._send_provider_update_event()
                 
                 wx.MessageBox("方案更新成功", "成功", wx.OK | wx.ICON_INFORMATION)
             
@@ -255,6 +272,9 @@ class ProviderDialog(wx.Dialog):
                 
                 # 更新按钮状态
                 self._update_button_states()
+                
+                # 发送方案更新事件
+                self._send_provider_update_event()
                 
                 wx.MessageBox("方案删除成功", "成功", wx.OK | wx.ICON_INFORMATION)
             

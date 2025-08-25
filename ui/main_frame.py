@@ -24,6 +24,7 @@ from utils.accessibility import AccessibilityUtils
 # 创建自定义事件
 RoleUpdateEvent, EVT_ROLE_UPDATE = wx.lib.newevent.NewEvent()
 ScanCompleteEvent, EVT_SCAN_COMPLETE = wx.lib.newevent.NewEvent()
+ProviderUpdateEvent, EVT_PROVIDER_UPDATE = wx.lib.newevent.NewEvent()
 
 
 class MainFrame(wx.Frame):
@@ -48,9 +49,15 @@ class MainFrame(wx.Frame):
         self.last_announcement_time = {}
         self.announcement_delay = 200  # 毫秒
         
+        # 播放状态控制
+        self.is_playing = False
+        self.is_loading = False
+        self.current_request_thread = None
+        
         # 绑定自定义事件
         self.Bind(EVT_ROLE_UPDATE, self.on_role_update)
         self.Bind(EVT_SCAN_COMPLETE, self.on_scan_complete)
+        self.Bind(EVT_PROVIDER_UPDATE, self.on_provider_update)
         
         # 初始化界面
         self._init_ui()
@@ -92,7 +99,7 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # 提供商选择组合框
-        provider_label = wx.StaticText(parent, label="方案选择:")
+        provider_label = wx.StaticText(parent, label="方案选择(&S):")
         self.provider_combo = wx.ComboBox(
             parent, 
             choices=[],
@@ -101,7 +108,7 @@ class MainFrame(wx.Frame):
         self.provider_combo.Bind(wx.EVT_COMBOBOX, self.on_provider_changed)
         
         # 刷新按钮
-        self.refresh_button = wx.Button(parent, label="刷新语音角色")
+        self.refresh_button = wx.Button(parent, label="刷新语音角色(&R)")
         self.refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh_roles)
         
         # 添加到sizer
@@ -116,7 +123,7 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 角色列表标签
-        list_label = wx.StaticText(parent, label="语音角色：")
+        list_label = wx.StaticText(parent, label="语音角色(&L)：")
         sizer.Add(list_label, 0, wx.LEFT | wx.TOP, 5)
         
         # 角色列表
@@ -134,7 +141,7 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 试听文本标签
-        preview_label = wx.StaticText(parent, label="语音试听文本:")
+        preview_label = wx.StaticText(parent, label="语音试听文本(&P):")
         sizer.Add(preview_label, 0, wx.LEFT | wx.TOP, 5)
         
         # 试听文本框
@@ -151,7 +158,7 @@ class MainFrame(wx.Frame):
         
         # 语速控制 - 使用TextCtrl
         speed_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        speed_label = wx.StaticText(parent, label="语速:")
+        speed_label = wx.StaticText(parent, label="语速(&E):")
         self.speed_text = wx.TextCtrl(
             parent,
             value="1.0",
@@ -173,7 +180,7 @@ class MainFrame(wx.Frame):
         
         # 音量控制 - 使用TextCtrl
         volume_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        volume_label = wx.StaticText(parent, label="音量:")
+        volume_label = wx.StaticText(parent, label="音量(&V):")
         self.volume_text = wx.TextCtrl(
             parent,
             value="1.0",
@@ -194,12 +201,18 @@ class MainFrame(wx.Frame):
         volume_sizer.Add(self.volume_text, 0, wx.ALIGN_CENTER_VERTICAL)
         
         # 试听按钮
-        self.preview_button = wx.Button(parent, label="试听选中角色")
+        self.preview_button = wx.Button(parent, label="试听选中角色(&T)")
         self.preview_button.Bind(wx.EVT_BUTTON, self.on_preview_button)
+        
+        # 停止按钮
+        self.stop_button = wx.Button(parent, label="停止播放(&O)")
+        self.stop_button.Bind(wx.EVT_BUTTON, self.on_stop_button)
+        self.stop_button.Enable(False)  # 初始禁用
         
         param_sizer.Add(speed_sizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
         param_sizer.Add(volume_sizer, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
-        param_sizer.Add(self.preview_button, 0, wx.ALIGN_CENTER_VERTICAL)
+        param_sizer.Add(self.preview_button, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        param_sizer.Add(self.stop_button, 0, wx.ALIGN_CENTER_VERTICAL)
         
         sizer.Add(param_sizer, 0, wx.EXPAND | wx.TOP, 10)
         
@@ -210,15 +223,15 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # 全选按钮
-        self.select_all_button = wx.Button(parent, label="全选")
+        self.select_all_button = wx.Button(parent, label="全选(&A)")
         self.select_all_button.Bind(wx.EVT_BUTTON, self.on_select_all)
         
         # 反选按钮
-        self.select_inverse_button = wx.Button(parent, label="反选")
+        self.select_inverse_button = wx.Button(parent, label="反选(&D)")
         self.select_inverse_button.Bind(wx.EVT_BUTTON, self.on_select_inverse)
         
         # 导出按钮
-        self.export_button = wx.Button(parent, label="导出为JSON")
+        self.export_button = wx.Button(parent, label="导出为JSON(&E)")
         self.export_button.Bind(wx.EVT_BUTTON, self.on_export_json)
         
         # 添加到sizer
@@ -335,9 +348,6 @@ class MainFrame(wx.Frame):
             self.current_roles = []
             self.selected_roles = set()
             
-            # 添加状态提示
-            self.role_list.Append("正在获取音色...")
-            
             # 获取当前选择的方案
             provider_name = self.provider_combo.GetValue()
             if not provider_name:
@@ -353,19 +363,11 @@ class MainFrame(wx.Frame):
                 self._update_button_states()
                 return
             
-            # 禁用刷新按钮，显示进度
-            self.refresh_button.Enable(False)
-            self.refresh_button.SetLabel("正在刷新...")
-            
-            # 在后台线程中刷新角色
-            threading.Thread(
-                target=self._refresh_roles_thread,
-                args=(provider,),
-                daemon=True
-            ).start()
+            # 更新按钮状态，但不自动刷新角色列表
+            self._update_button_states()
                 
         except Exception as e:
-            wx.MessageBox(f"切换方案失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            print(f"切换方案失败: {e}")
             self._update_button_states()
     
     def on_refresh_roles(self, event):
@@ -792,29 +794,8 @@ class MainFrame(wx.Frame):
         try:
             from ui.provider_dialog import ProviderDialog
             
-            # 保存当前选择的方案
-            current_provider = self.provider_combo.GetValue()
-            
             dialog = ProviderDialog(self)
-            # 无论点击确定还是取消，都重新加载配置
             dialog.ShowModal()
-            
-            # 重新加载配置以更新方案列表
-            self._load_config()
-            
-            # 尝试恢复之前选择的方案
-            if current_provider:
-                # 查找恢复的方案
-                index = self.provider_combo.FindString(current_provider)
-                if index != wx.NOT_FOUND:
-                    self.provider_combo.SetSelection(index)
-                else:
-                    # 如果找不到之前的方案，选择第一个
-                    if self.provider_combo.GetCount() > 0:
-                        self.provider_combo.SetSelection(0)
-                        # 触发方案改变事件以加载角色
-                        self.on_provider_changed(None)
-            
             dialog.Destroy()
             
         except Exception as e:
@@ -893,6 +874,25 @@ class MainFrame(wx.Frame):
             else:
                 wx.MessageBox("未找到可用的服务器", "扫描完成", wx.OK | wx.ICON_INFORMATION)
     
+    def on_provider_update(self, event):
+        """方案更新事件处理"""
+        try:
+            # 保存当前选择的方案
+            current_provider = self.provider_combo.GetValue()
+            
+            # 重新加载方案列表
+            self._load_config()
+            
+            # 尝试恢复之前选择的方案
+            if current_provider:
+                index = self.provider_combo.FindString(current_provider)
+                if index != wx.NOT_FOUND:
+                    self.provider_combo.SetSelection(index)
+                    self.on_provider_changed(None)
+            
+        except Exception as e:
+            print(f"方案更新失败: {e}")
+    
     def _preview_selected_role(self):
         """试听选中的角色"""
         try:
@@ -921,16 +921,19 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("请输入试听文本", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
-            # 禁用试听按钮，显示进度
+            # 禁用试听按钮，显示进度，启用停止按钮
             self.preview_button.Enable(False)
             self.preview_button.SetLabel("正在试听...")
+            self.stop_button.Enable(True)
+            self.is_loading = True
             
             # 在后台线程中试听
-            threading.Thread(
+            self.current_request_thread = threading.Thread(
                 target=self._preview_thread,
                 args=(provider, role, text, speed, volume),
                 daemon=True
-            ).start()
+            )
+            self.current_request_thread.start()
             
         except Exception as e:
             wx.MessageBox(f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
@@ -938,15 +941,27 @@ class MainFrame(wx.Frame):
     def _preview_thread(self, provider, role, text, speed, volume):
         """在后台线程中试听"""
         try:
+            # 检查是否已取消
+            if not self.is_loading:
+                return
+            
             # 调用TTS服务
             audio_data = self.tts_client.preview_speech(provider, role, text, speed, volume)
             
-            if audio_data:
-                # 播放音频
-                self._play_audio(audio_data)
+            # 检查是否已取消
+            if not self.is_loading or not audio_data:
+                return
+            
+            # 开始播放
+            self.is_loading = False
+            self.is_playing = True
+            
+            # 播放音频
+            self._play_audio(audio_data)
             
         except Exception as e:
-            wx.CallAfter(wx.MessageBox, f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            if self.is_loading:  # 只有没有取消时才显示错误
+                wx.CallAfter(wx.MessageBox, f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
         finally:
             # 恢复试听按钮
             wx.CallAfter(self._restore_preview_button)
@@ -967,8 +982,8 @@ class MainFrame(wx.Frame):
             pygame.mixer.music.load(temp_path)
             pygame.mixer.music.play()
             
-            # 等待播放完成
-            while pygame.mixer.music.get_busy():
+            # 等待播放完成，检查停止状态
+            while pygame.mixer.music.get_busy() and self.is_playing:
                 pygame.time.Clock().tick(10)
             
             # 清理资源
@@ -977,11 +992,45 @@ class MainFrame(wx.Frame):
             
         except Exception as e:
             print(f"音频播放失败: {e}")
+        finally:
+            self.is_playing = False
     
     def _restore_preview_button(self):
         """恢复试听按钮"""
         self.preview_button.Enable(True)
         self.preview_button.SetLabel("试听选中角色")
+        self.stop_button.Enable(False)
+        self.is_playing = False
+        self.is_loading = False
+    
+    def on_preview_button(self, event):
+        """试听按钮事件"""
+        self._preview_selected_role()
+    
+    def on_stop_button(self, event):
+        """停止按钮事件"""
+        try:
+            if self.is_playing:
+                # 停止pygame播放
+                try:
+                    import pygame
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.quit()
+                except:
+                    pass
+                self.is_playing = False
+                
+            if self.is_loading:
+                # 取消正在进行的请求（设置标志让线程检查）
+                self.is_loading = False
+                
+            # 恢复按钮状态
+            self._restore_preview_button()
+            
+        except Exception as e:
+            print(f"停止播放失败: {e}")
+            self._restore_preview_button()
     
     def _update_button_states(self):
         """更新按钮状态"""

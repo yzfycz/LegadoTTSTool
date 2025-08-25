@@ -103,21 +103,8 @@ class NetworkScanner:
         """获取默认扫描IP列表"""
         default_ips = []
         
-        # 添加一些常见的私有IP地址
-        common_ips = [
-            "192.168.1.1",
-            "192.168.0.1",
-            "10.0.0.1",
-            "127.0.0.1"
-        ]
-        
-        for ip in common_ips:
-            ip_parts = ip.split('.')
-            if len(ip_parts) == 4:
-                network_segment = '.'.join(ip_parts[:-1])
-                for i in range(1, 11):  # 只搜索前10个IP
-                    test_ip = f"{network_segment}.{i}"
-                    default_ips.append(test_ip)
+        # 只搜索本机回环地址作为最后的备用方案
+        default_ips.append("127.0.0.1")
         
         return default_ips
     
@@ -274,7 +261,6 @@ class NetworkScanner:
             
             network_info = {
                 'interfaces': {},
-                'scan_ranges': self.scan_ranges,
                 'timeout': self.timeout,
                 'max_threads': self.max_threads
             }
@@ -301,16 +287,13 @@ class NetworkScanner:
             print(f"获取网络信息失败: {e}")
             return {'error': str(e)}
     
-    def set_scan_config(self, timeout: int = None, max_threads: int = None, scan_ranges: List[str] = None):
+    def set_scan_config(self, timeout: int = None, max_threads: int = None):
         """设置扫描配置"""
         if timeout is not None:
             self.timeout = timeout
         
         if max_threads is not None:
             self.max_threads = max_threads
-        
-        if scan_ranges is not None:
-            self.scan_ranges = scan_ranges
     
     def ping_host(self, ip: str) -> bool:
         """ping主机"""
