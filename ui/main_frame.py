@@ -10,6 +10,7 @@ import wx.lib.newevent
 import threading
 import json
 import time
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -23,6 +24,7 @@ from utils.accessibility import AccessibilityUtils
 # 创建自定义事件
 RoleUpdateEvent, EVT_ROLE_UPDATE = wx.lib.newevent.NewEvent()
 ScanCompleteEvent, EVT_SCAN_COMPLETE = wx.lib.newevent.NewEvent()
+
 
 class MainFrame(wx.Frame):
     """主窗口类"""
@@ -41,6 +43,10 @@ class MainFrame(wx.Frame):
         # 当前选中的角色列表
         self.current_roles = []
         self.selected_roles = set()
+        
+        # 播报防抖控制
+        self.last_announcement_time = {}
+        self.announcement_delay = 200  # 毫秒
         
         # 绑定自定义事件
         self.Bind(EVT_ROLE_UPDATE, self.on_role_update)
@@ -143,32 +149,46 @@ class MainFrame(wx.Frame):
         # 参数控制区域
         param_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        # 语速控制 - 使用更好的无障碍支持
+        # 语速控制 - 使用TextCtrl
         speed_sizer = wx.BoxSizer(wx.HORIZONTAL)
         speed_label = wx.StaticText(parent, label="语速:")
         self.speed_text = wx.TextCtrl(
-            parent, 
-            value="1.0", 
+            parent,
+            value="1.0",
             size=(60, -1),
-            style=wx.TE_PROCESS_ENTER
+            style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT
         )
-        self.speed_text.Bind(wx.EVT_TEXT_ENTER, self.on_speed_changed)
-        self.speed_text.Bind(wx.EVT_KILL_FOCUS, self.on_speed_changed)
+        
+        # 设置控件名称和提示
+        self.speed_text.SetName("语速")
+        self.speed_text.SetHelpText("语速控制，范围0.5-2.0，使用上下键调节，支持直接输入")
+        
+        # 绑定事件
+        self.speed_text.Bind(wx.EVT_TEXT, self.on_speed_text_changed)
+        self.speed_text.Bind(wx.EVT_TEXT_ENTER, self.on_speed_text_enter)
+        self.speed_text.Bind(wx.EVT_KEY_DOWN, self.on_speed_key_down)
         
         speed_sizer.Add(speed_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
         speed_sizer.Add(self.speed_text, 0, wx.ALIGN_CENTER_VERTICAL)
         
-        # 音量控制 - 使用更好的无障碍支持
+        # 音量控制 - 使用TextCtrl
         volume_sizer = wx.BoxSizer(wx.HORIZONTAL)
         volume_label = wx.StaticText(parent, label="音量:")
         self.volume_text = wx.TextCtrl(
-            parent, 
-            value="1.0", 
+            parent,
+            value="1.0",
             size=(60, -1),
-            style=wx.TE_PROCESS_ENTER
+            style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT
         )
-        self.volume_text.Bind(wx.EVT_TEXT_ENTER, self.on_volume_changed)
-        self.volume_text.Bind(wx.EVT_KILL_FOCUS, self.on_volume_changed)
+        
+        # 设置控件名称和提示
+        self.volume_text.SetName("音量")
+        self.volume_text.SetHelpText("音量控制，范围0.5-2.0，使用上下键调节，支持直接输入")
+        
+        # 绑定事件
+        self.volume_text.Bind(wx.EVT_TEXT, self.on_volume_text_changed)
+        self.volume_text.Bind(wx.EVT_TEXT_ENTER, self.on_volume_text_enter)
+        self.volume_text.Bind(wx.EVT_KEY_DOWN, self.on_volume_key_down)
         
         volume_sizer.Add(volume_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
         volume_sizer.Add(self.volume_text, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -215,11 +235,11 @@ class MainFrame(wx.Frame):
         # 操作菜单
         operation_menu = wx.Menu()
         
-        # 提供商管理菜单项
+        # 方案管理菜单项
         provider_manage_item = operation_menu.Append(
             wx.ID_ANY, 
-            "提供商管理\tM", 
-            "管理TTS提供商配置"
+            "方案管理\tM", 
+            "管理TTS方案配置"
         )
         self.Bind(wx.EVT_MENU, self.on_provider_manage, provider_manage_item)
         
@@ -266,8 +286,7 @@ class MainFrame(wx.Frame):
             self.accessibility.set_control_name(self.refresh_button, "刷新语音角色按钮")
             self.accessibility.set_control_name(self.role_list, "语音角色")
             self.accessibility.set_control_name(self.preview_text, "语音试听文本")
-            self.accessibility.set_control_name(self.speed_text, "语速控制")
-            self.accessibility.set_control_name(self.volume_text, "音量控制")
+            # 文本框已设置名称，无需额外设置
             self.accessibility.set_control_name(self.preview_button, "试听按钮")
             self.accessibility.set_control_name(self.select_all_button, "全选按钮")
             self.accessibility.set_control_name(self.select_inverse_button, "反选按钮")
@@ -279,7 +298,7 @@ class MainFrame(wx.Frame):
     def _load_config(self):
         """加载配置"""
         try:
-            # 加载提供商列表
+            # 加载方案列表
             providers = self.provider_manager.get_all_providers()
             provider_names = []
             
@@ -309,7 +328,7 @@ class MainFrame(wx.Frame):
     
     # 事件处理方法
     def on_provider_changed(self, event):
-        """提供商选择改变事件"""
+        """方案选择改变事件"""
         try:
             # 清空当前角色列表
             self.role_list.Clear()
@@ -319,17 +338,17 @@ class MainFrame(wx.Frame):
             # 添加状态提示
             self.role_list.Append("正在获取音色...")
             
-            # 获取当前选择的提供商
+            # 获取当前选择的方案
             provider_name = self.provider_combo.GetValue()
             if not provider_name:
                 # 更新按钮状态
                 self._update_button_states()
                 return
             
-            # 获取提供商配置
+            # 获取方案配置
             provider = self.provider_manager.get_provider_by_name(provider_name)
             if not provider:
-                wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox("未找到方案配置", "错误", wx.OK | wx.ICON_ERROR)
                 # 更新按钮状态
                 self._update_button_states()
                 return
@@ -346,22 +365,22 @@ class MainFrame(wx.Frame):
             ).start()
                 
         except Exception as e:
-            wx.MessageBox(f"切换提供商失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(f"切换方案失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
             self._update_button_states()
     
     def on_refresh_roles(self, event):
         """刷新角色列表"""
         try:
-            # 获取当前选择的提供商
+            # 获取当前选择的方案
             provider_name = self.provider_combo.GetValue()
             if not provider_name:
                 wx.MessageBox("请先选择一个方案", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
-            # 获取提供商配置
+            # 获取方案配置
             provider = self.provider_manager.get_provider_by_name(provider_name)
             if not provider:
-                wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox("未找到方案配置", "错误", wx.OK | wx.ICON_ERROR)
                 return
             
             # 清空当前角色列表
@@ -464,31 +483,238 @@ class MainFrame(wx.Frame):
         else:
             event.Skip()
     
-    def on_speed_changed(self, event):
-        """语速改变事件"""
-        try:
-            # 验证输入值
-            value = float(self.speed_text.GetValue())
-            # 限制范围
-            value = max(0.5, min(2.0, value))
-            # 更新显示
-            self.speed_text.SetValue(str(value))
-        except ValueError:
-            # 如果输入无效，恢复为默认值
-            self.speed_text.SetValue("1.0")
+    def _slider_to_value(self, slider_pos):
+        """将滑动条位置转换为实际数值 (0-15 -> 0.5-2.0)"""
+        return slider_pos * 0.1 + 0.5
     
-    def on_volume_changed(self, event):
-        """音量改变事件"""
+    def _value_to_slider(self, value):
+        """将实际数值转换为滑动条位置 (0.5-2.0 -> 0-15)"""
+        return int((value - 0.5) / 0.1)
+    
+    def _validate_and_format_value(self, text_str, control_type):
+        """验证并格式化输入值
+        
+        Args:
+            text_str: 输入的文本
+            control_type: 控件类型（"语速"或"音量"）
+            
+        Returns:
+            (valid, formatted_value): (是否有效, 格式化后的值)
+        """
         try:
-            # 验证输入值
-            value = float(self.volume_text.GetValue())
-            # 限制范围
-            value = max(0.5, min(2.0, value))
-            # 更新显示
-            self.volume_text.SetValue(str(value))
-        except ValueError:
-            # 如果输入无效，恢复为默认值
-            self.volume_text.SetValue("1.0")
+            # 尝试转换为浮点数
+            value = float(text_str)
+            
+            # 检查范围
+            if 0.5 <= value <= 2.0:
+                # 格式化为一位小数
+                formatted = f"{value:.1f}"
+                return (True, formatted)
+            else:
+                # 超出范围，修正到最近的有效值
+                if value < 0.5:
+                    corrected = "0.5"
+                else:
+                    corrected = "2.0"
+                return (False, corrected)
+        except (ValueError, TypeError):
+            # 转换失败，恢复默认值
+            return (False, "1.0")
+    
+    def _should_announce(self, control_name, current_value):
+        """检查是否应该播报（防抖控制）"""
+        import time
+        current_time = time.time() * 1000  # 转换为毫秒
+        
+        key = f"{control_name}_{current_value}"
+        last_time = self.last_announcement_time.get(key, 0)
+        
+        if current_time - last_time >= self.announcement_delay:
+            self.last_announcement_time[key] = current_time
+            return True
+        return False
+    
+    def _announce_value_change(self, control_type, value):
+        """播报数值变化"""
+        if self._should_announce(control_type, value):
+            announcement = f"{control_type} {value:.1f}"
+            self.accessibility.announce_to_screen_reader(announcement)
+    
+    def on_speed_text_changed(self, event):
+        """语速文本改变事件"""
+        # 这个事件在每次按键时触发，我们在这里进行验证
+        text_str = self.speed_text.GetValue()
+        
+        # 如果输入为空，暂时不做验证
+        if not text_str.strip():
+            return
+        
+        # 验证并格式化输入
+        valid, formatted = self._validate_and_format_value(text_str, "语速")
+        
+        # 如果无效，需要修正
+        if not valid:
+            # 使用CallAfter避免在事件处理中修改控件
+            wx.CallAfter(self.speed_text.SetValue, formatted)
+            wx.CallAfter(self.speed_text.SetInsertionPointEnd)
+        
+        # 播报数值变化
+        try:
+            value = float(formatted)
+            self._announce_value_change("语速", value)
+        except (ValueError, TypeError):
+            pass
+        
+        event.Skip()
+    
+    def on_speed_text_enter(self, event):
+        """语速文本按Enter键事件"""
+        text_str = self.speed_text.GetValue()
+        
+        # 验证并格式化输入
+        valid, formatted = self._validate_and_format_value(text_str, "语速")
+        
+        # 更新控件值
+        self.speed_text.SetValue(formatted)
+        self.speed_text.SetInsertionPointEnd()
+        
+        # 播报最终值
+        try:
+            value = float(formatted)
+            self._announce_value_change("语速", value)
+        except (ValueError, TypeError):
+            pass
+        
+        event.Skip()
+    
+    def on_speed_key_down(self, event):
+        """语速键盘按键事件"""
+        key_code = event.GetKeyCode()
+        
+        # 处理上下键
+        if key_code == wx.WXK_UP:
+            # 增加数值
+            current_text = self.speed_text.GetValue()
+            try:
+                current_value = float(current_text)
+                new_value = min(2.0, current_value + 0.1)
+                new_text = f"{new_value:.1f}"
+                self.speed_text.SetValue(new_text)
+                self.speed_text.SetInsertionPointEnd()
+                self._announce_value_change("语速", new_value)
+            except (ValueError, TypeError):
+                self.speed_text.SetValue("1.0")
+                self.speed_text.SetInsertionPointEnd()
+                self._announce_value_change("语速", 1.0)
+            event.Skip(False)  # 阻止默认处理
+            return
+        
+        elif key_code == wx.WXK_DOWN:
+            # 减少数值
+            current_text = self.speed_text.GetValue()
+            try:
+                current_value = float(current_text)
+                new_value = max(0.5, current_value - 0.1)
+                new_text = f"{new_value:.1f}"
+                self.speed_text.SetValue(new_text)
+                self.speed_text.SetInsertionPointEnd()
+                self._announce_value_change("语速", new_value)
+            except (ValueError, TypeError):
+                self.speed_text.SetValue("1.0")
+                self.speed_text.SetInsertionPointEnd()
+                self._announce_value_change("语速", 1.0)
+            event.Skip(False)  # 阻止默认处理
+            return
+        
+        event.Skip()
+    
+    def on_volume_text_changed(self, event):
+        """音量文本改变事件"""
+        # 这个事件在每次按键时触发，我们在这里进行验证
+        text_str = self.volume_text.GetValue()
+        
+        # 如果输入为空，暂时不做验证
+        if not text_str.strip():
+            return
+        
+        # 验证并格式化输入
+        valid, formatted = self._validate_and_format_value(text_str, "音量")
+        
+        # 如果无效，需要修正
+        if not valid:
+            # 使用CallAfter避免在事件处理中修改控件
+            wx.CallAfter(self.volume_text.SetValue, formatted)
+            wx.CallAfter(self.volume_text.SetInsertionPointEnd)
+        
+        # 播报数值变化
+        try:
+            value = float(formatted)
+            self._announce_value_change("音量", value)
+        except (ValueError, TypeError):
+            pass
+        
+        event.Skip()
+    
+    def on_volume_text_enter(self, event):
+        """音量文本按Enter键事件"""
+        text_str = self.volume_text.GetValue()
+        
+        # 验证并格式化输入
+        valid, formatted = self._validate_and_format_value(text_str, "音量")
+        
+        # 更新控件值
+        self.volume_text.SetValue(formatted)
+        self.volume_text.SetInsertionPointEnd()
+        
+        # 播报最终值
+        try:
+            value = float(formatted)
+            self._announce_value_change("音量", value)
+        except (ValueError, TypeError):
+            pass
+        
+        event.Skip()
+    
+    def on_volume_key_down(self, event):
+        """音量键盘按键事件"""
+        key_code = event.GetKeyCode()
+        
+        # 处理上下键
+        if key_code == wx.WXK_UP:
+            # 增加数值
+            current_text = self.volume_text.GetValue()
+            try:
+                current_value = float(current_text)
+                new_value = min(2.0, current_value + 0.1)
+                new_text = f"{new_value:.1f}"
+                self.volume_text.SetValue(new_text)
+                self.volume_text.SetInsertionPointEnd()
+                self._announce_value_change("音量", new_value)
+            except (ValueError, TypeError):
+                self.volume_text.SetValue("1.0")
+                self.volume_text.SetInsertionPointEnd()
+                self._announce_value_change("音量", 1.0)
+            event.Skip(False)  # 阻止默认处理
+            return
+        
+        elif key_code == wx.WXK_DOWN:
+            # 减少数值
+            current_text = self.volume_text.GetValue()
+            try:
+                current_value = float(current_text)
+                new_value = max(0.5, current_value - 0.1)
+                new_text = f"{new_value:.1f}"
+                self.volume_text.SetValue(new_text)
+                self.volume_text.SetInsertionPointEnd()
+                self._announce_value_change("音量", new_value)
+            except (ValueError, TypeError):
+                self.volume_text.SetValue("1.0")
+                self.volume_text.SetInsertionPointEnd()
+                self._announce_value_change("音量", 1.0)
+            event.Skip(False)  # 阻止默认处理
+            return
+        
+        event.Skip()
     
     def on_preview_button(self, event):
         """试听按钮事件"""
@@ -522,12 +748,12 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("请先选择要导出的角色", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
-            # 获取当前提供商配置
+            # 获取当前方案配置
             provider_name = self.provider_combo.GetValue()
             provider = self.provider_manager.get_provider_by_name(provider_name)
             
             if not provider:
-                wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox("未找到方案配置", "错误", wx.OK | wx.ICON_ERROR)
                 return
             
             # 选择保存文件
@@ -562,37 +788,37 @@ class MainFrame(wx.Frame):
             wx.MessageBox(f"导出失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
     
     def on_provider_manage(self, event):
-        """提供商管理事件"""
+        """方案管理事件"""
         try:
             from ui.provider_dialog import ProviderDialog
             
-            # 保存当前选择的提供商
+            # 保存当前选择的方案
             current_provider = self.provider_combo.GetValue()
             
             dialog = ProviderDialog(self)
             # 无论点击确定还是取消，都重新加载配置
             dialog.ShowModal()
             
-            # 重新加载配置以更新提供商列表
+            # 重新加载配置以更新方案列表
             self._load_config()
             
-            # 尝试恢复之前选择的提供商
+            # 尝试恢复之前选择的方案
             if current_provider:
-                # 查找恢复的提供商
+                # 查找恢复的方案
                 index = self.provider_combo.FindString(current_provider)
                 if index != wx.NOT_FOUND:
                     self.provider_combo.SetSelection(index)
                 else:
-                    # 如果找不到之前的提供商，选择第一个
+                    # 如果找不到之前的方案，选择第一个
                     if self.provider_combo.GetCount() > 0:
                         self.provider_combo.SetSelection(0)
-                        # 触发提供商改变事件以加载角色
+                        # 触发方案改变事件以加载角色
                         self.on_provider_changed(None)
             
             dialog.Destroy()
             
         except Exception as e:
-            wx.MessageBox(f"打开提供商管理失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(f"打开方案管理失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
     
     def on_help(self, event):
         """帮助事件"""
@@ -620,7 +846,42 @@ class MainFrame(wx.Frame):
     
     def on_exit(self, event):
         """退出事件"""
-        self.Close()
+        try:
+            # 停止所有正在运行的线程
+            self._stop_all_threads()
+            
+            # 关闭窗口
+            self.Destroy()
+        except Exception as e:
+            print(f"退出时发生错误: {e}")
+            # 强制关闭
+            try:
+                self.Destroy()
+            except:
+                pass
+    
+    def _stop_all_threads(self):
+        """停止所有正在运行的线程"""
+        try:
+            # 停止试听相关的线程
+            if hasattr(self, 'preview_button'):
+                self.preview_button.Enable(True)
+                self.preview_button.SetLabel("试听选中角色")
+            
+            # 清理TTS客户端资源
+            if hasattr(self, 'tts_client'):
+                self.tts_client = None
+            
+            # 清理其他管理器
+            if hasattr(self, 'provider_manager'):
+                self.provider_manager = None
+            if hasattr(self, 'json_exporter'):
+                self.json_exporter = None
+            if hasattr(self, 'network_scanner'):
+                self.network_scanner = None
+            
+        except Exception as e:
+            print(f"停止线程时发生错误: {e}")
     
     def on_scan_complete(self, event):
         """网络扫描完成事件"""
@@ -643,12 +904,12 @@ class MainFrame(wx.Frame):
             
             role = self.current_roles[index]
             
-            # 获取当前提供商配置
+            # 获取当前方案配置
             provider_name = self.provider_combo.GetValue()
             provider = self.provider_manager.get_provider_by_name(provider_name)
             
             if not provider:
-                wx.MessageBox("未找到提供商配置", "错误", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox("未找到方案配置", "错误", wx.OK | wx.ICON_ERROR)
                 return
             
             # 获取试听参数

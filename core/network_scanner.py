@@ -25,15 +25,6 @@ class NetworkScanner:
         self.timeout = 3
         self.max_threads = 50
         
-        # 常见扫描网段
-        self.scan_ranges = [
-            "192.168.1.1-254",
-            "192.168.0.1-254", 
-            "10.0.0.1-254",
-            "172.16.0.1-254",
-            "127.0.0.1"
-        ]
-        
         # index TTS 端口
         self.index_tts_ports = {
             'web': 7860,
@@ -62,24 +53,73 @@ class NetworkScanner:
             return []
     
     def _get_scan_ips(self) -> List[str]:
-        """获取要扫描的IP列表"""
+        """获取要扫描的IP列表 - 只搜索本机网段"""
         ip_list = []
         
-        for range_str in self.scan_ranges:
-            if '-' in range_str:
-                # 网段范围
-                base_ip, end_ip = range_str.split('-')
-                base_parts = base_ip.split('.')
-                
-                for i in range(1, int(end_ip) + 1):
-                    if len(base_parts) == 4:
-                        ip = f"{'.'.join(base_parts[:-1])}.{i}"
+        try:
+            # 获取本机IP地址
+            local_ip = self._get_local_ip()
+            if local_ip:
+                # 提取网段
+                ip_parts = local_ip.split('.')
+                if len(ip_parts) == 4:
+                    # 生成网段内的所有IP (1-254)
+                    network_segment = '.'.join(ip_parts[:-1])
+                    for i in range(1, 255):
+                        ip = f"{network_segment}.{i}"
                         ip_list.append(ip)
+                    print(f"检测到本机IP: {local_ip}, 搜索网段: {network_segment}.1-254")
+                else:
+                    # 如果IP格式不正确，搜索默认网段
+                    ip_list.extend(self._get_default_ips())
             else:
-                # 单个IP
-                ip_list.append(range_str)
+                # 如果无法获取本机IP，搜索默认网段
+                ip_list.extend(self._get_default_ips())
+                
+        except Exception as e:
+            print(f"获取扫描IP列表失败: {e}")
+            ip_list.extend(self._get_default_ips())
         
         return ip_list
+    
+    def _get_local_ip(self) -> Optional[str]:
+        """获取本机IP地址"""
+        try:
+            # 创建一个UDP套接字连接到公共DNS服务器
+            # 这样可以获取本机用于外网通信的IP地址
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+            return local_ip
+        except Exception:
+            # 如果失败，尝试获取主机名
+            try:
+                local_ip = socket.gethostbyname(socket.gethostname())
+                return local_ip
+            except Exception:
+                return None
+    
+    def _get_default_ips(self) -> List[str]:
+        """获取默认扫描IP列表"""
+        default_ips = []
+        
+        # 添加一些常见的私有IP地址
+        common_ips = [
+            "192.168.1.1",
+            "192.168.0.1",
+            "10.0.0.1",
+            "127.0.0.1"
+        ]
+        
+        for ip in common_ips:
+            ip_parts = ip.split('.')
+            if len(ip_parts) == 4:
+                network_segment = '.'.join(ip_parts[:-1])
+                for i in range(1, 11):  # 只搜索前10个IP
+                    test_ip = f"{network_segment}.{i}"
+                    default_ips.append(test_ip)
+        
+        return default_ips
     
     def _scan_ports(self, ip_list: List[str]) -> List[Dict[str, Any]]:
         """扫描端口"""

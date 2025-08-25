@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-提供商配置对话框模块
-用于创建和编辑TTS提供商配置
+方案配置对话框模块
+用于创建和编辑TTS方案配置
 """
 
 import wx
@@ -12,9 +12,9 @@ import time
 from typing import Dict, Any, Optional
 
 class ConfigDialog(wx.Dialog):
-    """提供商配置对话框"""
+    """方案配置对话框"""
     
-    def __init__(self, parent, title="配置提供商", provider=None, server_data=None):
+    def __init__(self, parent, title="配置方案", provider=None, server_data=None):
         """初始化配置对话框"""
         super().__init__(
             parent, 
@@ -23,20 +23,20 @@ class ConfigDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
         
-        # 提供商数据
+        # 方案数据
         self.provider = provider
         self.server_data = server_data
         
         # 配置数据
         self.config_data = {}
         
-        # 支持的提供商类型
+        # 支持的方案类型
         self.provider_types = ["index_tts"]
         
         # 初始化界面
         self._init_ui()
         
-        # 如果有提供商数据，加载配置
+        # 如果有方案数据，加载配置
         if provider:
             self._load_provider_config()
         elif server_data:
@@ -82,8 +82,8 @@ class ConfigDialog(wx.Dialog):
         grid_sizer = wx.FlexGridSizer(rows=2, cols=2, vgap=8, hgap=10)
         grid_sizer.AddGrowableCol(1, 1)
         
-        # 提供商类型
-        type_label = wx.StaticText(parent, label="提供商类型:")
+        # 方案类型
+        type_label = wx.StaticText(parent, label="方案类型:")
         self.type_combo = wx.ComboBox(
             parent, 
             choices=self.provider_types,
@@ -212,7 +212,7 @@ class ConfigDialog(wx.Dialog):
         sizer = wx.StaticBoxSizer(static_box, wx.VERTICAL)
         
         # 创建网格布局
-        grid_sizer = wx.FlexGridSizer(rows=4, cols=2, vgap=8, hgap=10)
+        grid_sizer = wx.FlexGridSizer(rows=5, cols=2, vgap=8, hgap=10)
         grid_sizer.AddGrowableCol(1, 1)
         
         # 服务器地址
@@ -221,17 +221,28 @@ class ConfigDialog(wx.Dialog):
         grid_sizer.Add(server_label, 0, wx.ALIGN_CENTER_VERTICAL)
         grid_sizer.Add(self.server_address_text, 0, wx.EXPAND)
         
-        # Web接口端口
+        # Web接口端口（非必填）
         web_port_label = wx.StaticText(self.config_panel, label="Web接口端口:")
         self.web_port_text = wx.TextCtrl(self.config_panel, value="7860")
         grid_sizer.Add(web_port_label, 0, wx.ALIGN_CENTER_VERTICAL)
         grid_sizer.Add(self.web_port_text, 0, wx.EXPAND)
         
-        # 合成接口端口
+        # 合成接口端口（非必填）
         synth_port_label = wx.StaticText(self.config_panel, label="合成接口端口:")
         self.synth_port_text = wx.TextCtrl(self.config_panel, value="9880")
         grid_sizer.Add(synth_port_label, 0, wx.ALIGN_CENTER_VERTICAL)
         grid_sizer.Add(self.synth_port_text, 0, wx.EXPAND)
+        
+        # 连接超时时间
+        timeout_label = wx.StaticText(self.config_panel, label="连接超时时间(秒):")
+        self.timeout_text = wx.TextCtrl(self.config_panel, value="30")
+        timeout_help = wx.StaticText(self.config_panel, label="0表示无超时")
+        grid_sizer.Add(timeout_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        timeout_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        timeout_sizer.Add(self.timeout_text, 1, wx.EXPAND)
+        timeout_sizer.Add(timeout_help, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 5)
+        grid_sizer.Add(timeout_sizer, 0, wx.EXPAND)
         
         # 搜索按钮
         scan_button = wx.Button(self.config_panel, label="搜索局域网")
@@ -243,9 +254,6 @@ class ConfigDialog(wx.Dialog):
         
         # 添加到主sizer
         self.config_sizer.Add(sizer, 0, wx.EXPAND)
-        
-        # 创建试听文本配置
-        self._create_preview_text_config()
     
     def _create_generic_config(self):
         """创建通用配置界面"""
@@ -274,25 +282,7 @@ class ConfigDialog(wx.Dialog):
         # 添加到主sizer
         self.config_sizer.Add(sizer, 0, wx.EXPAND)
     
-    def _create_preview_text_config(self):
-        """创建试听文本配置"""
-        # 创建静态框
-        static_box = wx.StaticBox(self.config_panel, label="试听文本")
-        sizer = wx.StaticBoxSizer(static_box, wx.VERTICAL)
         
-        # 文本框
-        self.preview_text = wx.TextCtrl(
-            self.config_panel,
-            value="这是一段默认的试听文本，用于测试语音合成效果。",
-            style=wx.TE_MULTILINE | wx.TE_RICH2
-        )
-        self.preview_text.SetMinSize((-1, 80))
-        
-        sizer.Add(self.preview_text, 0, wx.EXPAND | wx.ALL, 10)
-        
-        # 添加到主sizer
-        self.config_sizer.Add(sizer, 0, wx.EXPAND | wx.TOP, 10)
-    
     def _load_dynamic_config(self):
         """加载动态配置"""
         provider_type = self.type_combo.GetValue()
@@ -303,13 +293,16 @@ class ConfigDialog(wx.Dialog):
                 self.server_address_text.SetValue(self.provider.get('server_address', ''))
             
             if hasattr(self, 'web_port_text'):
-                self.web_port_text.SetValue(str(self.provider.get('web_port', 7860)))
+                web_port = self.provider.get('web_port', 7860)
+                self.web_port_text.SetValue(str(web_port) if web_port else '')
             
             if hasattr(self, 'synth_port_text'):
-                self.synth_port_text.SetValue(str(self.provider.get('synth_port', 9880)))
+                synth_port = self.provider.get('synth_port', 9880)
+                self.synth_port_text.SetValue(str(synth_port) if synth_port else '')
             
-            if hasattr(self, 'preview_text'):
-                self.preview_text.SetValue(self.provider.get('preview_text', ''))
+            if hasattr(self, 'timeout_text'):
+                timeout = self.provider.get('timeout', 30)
+                self.timeout_text.SetValue(str(timeout) if timeout else '30')
     
     def on_scan_network(self, event):
         """搜索局域网事件"""
@@ -404,10 +397,10 @@ class ConfigDialog(wx.Dialog):
     
     def _validate_config(self):
         """验证配置"""
-        # 检查提供商类型
+        # 检查方案类型
         provider_type = self.type_combo.GetValue()
         if not provider_type:
-            wx.MessageBox("请选择提供商类型", "提示", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox("请选择方案类型", "提示", wx.OK | wx.ICON_INFORMATION)
             return False
         
         # 根据类型验证配置
@@ -425,41 +418,47 @@ class ConfigDialog(wx.Dialog):
             self.server_address_text.SetFocus()
             return False
         
-        # 检查Web端口
+        # 检查Web端口（如果填写了）
         web_port = self.web_port_text.GetValue().strip()
-        if not web_port:
-            wx.MessageBox("请输入Web接口端口", "提示", wx.OK | wx.ICON_INFORMATION)
-            self.web_port_text.SetFocus()
-            return False
-        
-        try:
-            web_port = int(web_port)
-            if not (1 <= web_port <= 65535):
-                wx.MessageBox("Web端口必须在1-65535之间", "提示", wx.OK | wx.ICON_INFORMATION)
+        if web_port:
+            try:
+                web_port = int(web_port)
+                if not (1 <= web_port <= 65535):
+                    wx.MessageBox("Web端口必须在1-65535之间", "提示", wx.OK | wx.ICON_INFORMATION)
+                    self.web_port_text.SetFocus()
+                    return False
+            except ValueError:
+                wx.MessageBox("Web端口必须是数字", "提示", wx.OK | wx.ICON_INFORMATION)
                 self.web_port_text.SetFocus()
                 return False
-        except ValueError:
-            wx.MessageBox("Web端口必须是数字", "提示", wx.OK | wx.ICON_INFORMATION)
-            self.web_port_text.SetFocus()
-            return False
         
-        # 检查合成端口
+        # 检查合成端口（如果填写了）
         synth_port = self.synth_port_text.GetValue().strip()
-        if not synth_port:
-            wx.MessageBox("请输入合成接口端口", "提示", wx.OK | wx.ICON_INFORMATION)
-            self.synth_port_text.SetFocus()
-            return False
-        
-        try:
-            synth_port = int(synth_port)
-            if not (1 <= synth_port <= 65535):
-                wx.MessageBox("合成端口必须在1-65535之间", "提示", wx.OK | wx.ICON_INFORMATION)
+        if synth_port:
+            try:
+                synth_port = int(synth_port)
+                if not (1 <= synth_port <= 65535):
+                    wx.MessageBox("合成端口必须在1-65535之间", "提示", wx.OK | wx.ICON_INFORMATION)
+                    self.synth_port_text.SetFocus()
+                    return False
+            except ValueError:
+                wx.MessageBox("合成端口必须是数字", "提示", wx.OK | wx.ICON_INFORMATION)
                 self.synth_port_text.SetFocus()
                 return False
-        except ValueError:
-            wx.MessageBox("合成端口必须是数字", "提示", wx.OK | wx.ICON_INFORMATION)
-            self.synth_port_text.SetFocus()
-            return False
+        
+        # 检查超时时间
+        timeout_str = self.timeout_text.GetValue().strip()
+        if timeout_str:
+            try:
+                timeout = int(timeout_str)
+                if timeout < 0:
+                    wx.MessageBox("超时时间不能为负数", "提示", wx.OK | wx.ICON_INFORMATION)
+                    self.timeout_text.SetFocus()
+                    return False
+            except ValueError:
+                wx.MessageBox("超时时间必须是整数", "提示", wx.OK | wx.ICON_INFORMATION)
+                self.timeout_text.SetFocus()
+                return False
         
         return True
     
@@ -489,11 +488,19 @@ class ConfigDialog(wx.Dialog):
         # 根据类型添加配置
         provider_type = config_data['type']
         if provider_type == "index_tts":
+            # 处理端口（非必填）
+            web_port = self.web_port_text.GetValue().strip()
+            synth_port = self.synth_port_text.GetValue().strip()
+            
+            # 处理超时时间
+            timeout_str = self.timeout_text.GetValue().strip()
+            timeout = int(timeout_str) if timeout_str else 30
+            
             config_data.update({
                 'server_address': self.server_address_text.GetValue().strip(),
-                'web_port': int(self.web_port_text.GetValue().strip()),
-                'synth_port': int(self.synth_port_text.GetValue().strip()),
-                'preview_text': self.preview_text.GetValue().strip()
+                'web_port': int(web_port) if web_port else None,
+                'synth_port': int(synth_port) if synth_port else None,
+                'timeout': timeout
             })
         else:
             config_data.update({

@@ -90,7 +90,7 @@ LegadoTTSTool/
 │   ├── provider_dialog.py  # 提供商管理对话框
 │   └── config_dialog.py    # 提供商配置对话框
 ├── core/                   # 核心功能模块
-│   ├── provider_manager.py # 提供商管理器
+│   ├── provider_manager.py # 方案管理器
 │   ├── network_scanner.py  # 网络扫描器
 │   ├── tts_client.py       # TTS 客户端
 │   └── json_exporter.py    # JSON 导出器
@@ -105,27 +105,31 @@ LegadoTTSTool/
 
 ### ProviderManager
 - Sophisticated CRUD system with UUID generation using `uuid.uuid4()`
-- Flexible name matching for provider selection
+- Flexible name matching for solution selection
 - Automatic configuration validation and timestamp management
-- Handles provider state (enabled/disabled) and usage tracking
+- Handles solution state (enabled/disabled) and usage tracking
 
 ### TTSClient
 - Handles complex Gradio API interactions for index TTS services
 - Implements Unicode encoding fixes via stdout redirection
 - Supports voice role retrieval and real-time text-to-speech synthesis
 - Comprehensive error handling for network and API failures
+- Supports HTTP/HTTPS URLs and optional port configuration
+- Includes timeout control for preview operations
 
 ### NetworkScanner
-- Multi-threaded LAN discovery scanning common IP ranges
+- Intelligent LAN discovery that detects local network segment
 - Verifies TTS servers via Gradio API endpoint testing
 - Supports both index TTS and other service type detection
 - Concurrent scanning with result aggregation
+- Automatically detects local IP and scans only the local network segment
 
 ### JSONExporter
 - Generates Legado-compatible JSON exports with proper structure
 - Creates unique timestamp-based IDs with collision avoidance
 - Supports batch export with configurable parameters (speed, volume)
 - Includes proper content type and concurrent rate settings
+- Outputs URLs without encoding for direct use
 
 ## 用户界面设计
 
@@ -156,8 +160,8 @@ LegadoTTSTool/
 ### 控件说明
 
 #### 方案选择组合框
-- **功能**: 选择已配置的TTS提供商
-- **显示格式**: `自定义名称 - 提供商类型`
+- **功能**: 选择已配置的TTS方案
+- **显示格式**: `自定义名称 - 方案类型`
 - **快捷键**: Alt+S
 
 #### 角色列表
@@ -166,9 +170,15 @@ LegadoTTSTool/
 - **过滤功能**: 自动过滤"使用参考音频"
 
 #### 参数控制
-- **语速**: 文本框输入，范围 0.5-2.0，支持回车确认
-- **音量**: 文本框输入，范围 0.5-2.0，支持回车确认
-- **验证**: 自动验证输入范围，无效时恢复默认值
+- **语速**: TextCtrl文本框，范围 0.5-2.0，支持直接输入和上下键调节
+- **音量**: TextCtrl文本框，范围 0.5-2.0，支持直接输入和上下键调节
+- **输入验证**: 自动限制输入范围，格式化为一位小数，超出范围自动修正
+- **键盘控制**: 
+  - 上下键按0.1步长调节
+  - 直接输入数值支持
+  - Enter键确认输入
+  - 自动格式化和修正
+- **无障碍播报**: 屏幕阅读器实时播报数值变化，200ms防抖控制
 
 ## 无障碍设计
 
@@ -199,6 +209,11 @@ LegadoTTSTool/
 - **屏幕阅读器支持**: Complete labeling and custom accessibility utilities
 - **焦点管理**: Logical focus order and visual indicators
 - **状态反馈**: Real-time status updates for all operations
+- **参数控制优化**: TextCtrl + 输入验证 + 键盘控制 + 实时播报
+  - 范围验证：0.5-2.0自动限制
+  - 格式化：一位小数自动格式化
+  - 键盘控制：上下键0.1步长调节
+  - 无障碍播报：200ms防抖实时反馈
 
 ### Unicode 处理
 The TTSClient implements a unique solution for gradio_client encoding issues:
@@ -289,7 +304,7 @@ The application automatically creates `config/providers.json` on first run with 
       "server_address": "127.0.0.1",
       "web_port": 7860,
       "synth_port": 9880,
-      "preview_text": "这是一段默认的试听文本，用于测试语音合成效果。"
+      "timeout": 30
     }
   ],
   "version": "1.0.0",
@@ -450,9 +465,10 @@ pip install -r requirements.txt
 
 ### 修复版本 (2024-08-25)
 - **修复API调用问题**: 解决Gradio客户端编码问题
-- **修复界面更新**: 提供商修改后立即生效
+- **修复界面更新**: 方案修改后立即生效
 - **修复退出错误**: 解决程序退出时的递归错误
 - **优化用户体验**: 状态显示和智能过滤
+- **改进参数控制**: 将Slider替换为TextCtrl，提升无障碍体验
 
 ## 贡献指南
 

@@ -54,18 +54,24 @@ class LegadoTTSApp(wx.App):
         """应用程序退出时的清理工作"""
         try:
             print("应用程序正在退出...")
-            # 清理资源
+            
+            # 先清理框架
+            if hasattr(self, 'frame') and self.frame:
+                try:
+                    self.frame.Destroy()
+                    self.frame = None
+                except:
+                    pass
+            
+            # 然后清理管理器
             if hasattr(self, 'provider_manager'):
                 self.provider_manager = None
-            
-            if hasattr(self, 'frame'):
-                self.frame = None
             
         except Exception as e:
             print(f"退出清理失败: {e}")
         
         # 调用父类的退出方法
-        return super().OnExit()
+        return 0
     
     def _create_directories(self):
         """创建必要的目录结构"""

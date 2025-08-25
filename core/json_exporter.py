@@ -114,25 +114,24 @@ class JSONExporter:
         """构建index TTS URL"""
         try:
             server_address = provider.get('server_address')
-            synth_port = provider.get('synth_port', 9880)
+            synth_port = provider.get('synth_port')
             
             if not server_address:
                 raise Exception("服务器地址不能为空")
             
-            # 构建URL
-            base_url = f"http://{server_address}:{synth_port}/"
+            # 构建基础URL
+            if server_address.startswith(('http://', 'https://')):
+                # 如果是完整的URL，直接使用
+                base_url = server_address.rstrip('/')
+            elif synth_port:
+                # 如果有端口号，添加端口
+                base_url = f"http://{server_address}:{synth_port}".rstrip('/')
+            else:
+                # 否则使用默认的HTTP
+                base_url = f"http://{server_address}".rstrip('/')
             
-            # 构建参数
-            params = {
-                'text': '{{speakText}}',
-                'speaker': role,
-                'speed': speed,
-                'volume': volume
-            }
-            
-            # 构建完整URL
-            from urllib.parse import urlencode
-            url = f"{base_url}?{urlencode(params)}"
+            # 构建完整URL - 不进行URL编码，保持原文输出
+            url = f"{base_url}?text={{{{speakText}}}}&speaker={role}&speed={speed}&volume={volume}"
             
             return url
             
@@ -158,9 +157,8 @@ class JSONExporter:
                 'volume': volume
             }
             
-            # 构建完整URL
-            from urllib.parse import urlencode
-            url = f"{base_url}/synthesize?{urlencode(params)}"
+            # 构建完整URL - 不进行URL编码，保持原文输出
+            url = f"{base_url}/synthesize?text={{{{speakText}}}}&voice={role}&speed={speed}&volume={volume}"
             
             return url
             

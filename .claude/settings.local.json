@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rename:*)"
+      "Bash(rename:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": [],

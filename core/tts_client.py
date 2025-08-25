@@ -27,6 +27,21 @@ class TTSClient:
         self.max_retries = 3
         self.retry_delay = 1
     
+    def _build_server_url(self, server_address: str, web_port: int = None) -> str:
+        """构建服务器URL"""
+        if not server_address:
+            raise ValueError("服务器地址不能为空")
+        
+        # 如果服务器地址已经包含协议，直接使用
+        if server_address.startswith(('http://', 'https://')):
+            return server_address.rstrip('/')
+        
+        # 如果有端口号，添加端口
+        if web_port:
+            return f"http://{server_address}:{web_port}".rstrip('/')
+        else:
+            return f"http://{server_address}".rstrip('/')
+    
     def get_roles(self, provider: Dict[str, Any]) -> List[str]:
         """获取角色列表"""
         try:
@@ -59,8 +74,9 @@ class TTSClient:
             sys.stdout = io.StringIO()
             
             try:
-                # 创建Gradio客户端
-                client = Client(f"http://{server_address}:{web_port}/")
+                # 构建服务器URL
+                server_url = self._build_server_url(server_address, web_port)
+                client = Client(f"{server_url}/")
             finally:
                 # 恢复标准输出
                 sys.stdout = old_stdout
@@ -169,12 +185,15 @@ class TTSClient:
         """预览index TTS语音"""
         try:
             server_address = provider.get('server_address')
-            synth_port = provider.get('synth_port', 9880)
+            synth_port = provider.get('synth_port')
             
             if not server_address:
                 raise Exception("服务器地址不能为空")
             
-            # 构建请求URL
+            # 构建服务器URL
+            base_url = self._build_server_url(server_address, synth_port)
+            
+            # 构建请求参数
             params = {
                 'text': text,
                 'speaker': role,
@@ -182,11 +201,9 @@ class TTSClient:
                 'volume': volume
             }
             
-            url = f"http://{server_address}:{synth_port}/"
-            
             # 发送请求
             response = requests.get(
-                url,
+                base_url,
                 params=params,
                 timeout=self.timeout,
                 stream=True
@@ -357,11 +374,22 @@ class TTSClient:
                 'error': str(e)
             }
     
-    def _test_http_connection(self, host: str, port: int) -> Dict[str, Any]:
+    def _test_http_connection(self, host: str, port: int = None) -> Dict[str, Any]:
         """测试HTTP连接"""
         try:
+            # 构建测试URL
+            if host.startswith(('http://', 'https://')):
+                # 如果是完整的URL，直接使用
+                test_url = f"{host}/".rstrip('/')
+            elif port:
+                # 如果有端口号，添加端口
+                test_url = f"http://{host}:{port}/"
+            else:
+                # 否则使用默认的HTTP
+                test_url = f"http://{host}/"
+            
             response = requests.get(
-                f"http://{host}:{port}/",
+                test_url,
                 timeout=self.timeout
             )
             
@@ -416,7 +444,8 @@ class TTSClient:
             
             # 尝试获取版本信息
             try:
-                client = Client(f"http://{server_address}:{web_port}/")
+                server_url = self._build_server_url(server_address, web_port)
+                client = Client(f"{server_url}/")
                 # 这里可以添加获取版本信息的API调用
                 version = "unknown"
             except:
