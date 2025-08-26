@@ -20,11 +20,7 @@ from core.json_exporter import JSONExporter
 from core.network_scanner import NetworkScanner
 from utils.file_utils import FileUtils
 from utils.accessibility import AccessibilityUtils
-
-# 创建自定义事件
-RoleUpdateEvent, EVT_ROLE_UPDATE = wx.lib.newevent.NewEvent()
-ScanCompleteEvent, EVT_SCAN_COMPLETE = wx.lib.newevent.NewEvent()
-ProviderUpdateEvent, EVT_PROVIDER_UPDATE = wx.lib.newevent.NewEvent()
+from ui.events import RoleUpdateEvent, EVT_ROLE_UPDATE, ScanCompleteEvent, EVT_SCAN_COMPLETE, ProviderUpdateEvent, EVT_PROVIDER_UPDATE
 
 
 class MainFrame(wx.Frame):
@@ -58,6 +54,10 @@ class MainFrame(wx.Frame):
         self.Bind(EVT_ROLE_UPDATE, self.on_role_update)
         self.Bind(EVT_SCAN_COMPLETE, self.on_scan_complete)
         self.Bind(EVT_PROVIDER_UPDATE, self.on_provider_update)
+        
+        # 初始化日志系统
+        from utils.logger import get_logger
+        self.logger = get_logger()
         
         # 初始化界面
         self._init_ui()
@@ -255,6 +255,24 @@ class MainFrame(wx.Frame):
             "管理TTS方案配置"
         )
         self.Bind(wx.EVT_MENU, self.on_provider_manage, provider_manage_item)
+        
+        operation_menu.AppendSeparator()
+        
+        # 调试模式菜单项
+        debug_mode_item = operation_menu.AppendCheckItem(
+            wx.ID_ANY, 
+            "调试模式\tD", 
+            "开启/关闭调试日志"
+        )
+        self.Bind(wx.EVT_MENU, self.on_debug_mode, debug_mode_item)
+        
+        # 查看日志菜单项
+        view_log_item = operation_menu.Append(
+            wx.ID_ANY, 
+            "查看日志\tL", 
+            "打开日志文件所在目录"
+        )
+        self.Bind(wx.EVT_MENU, self.on_view_log, view_log_item)
         
         operation_menu.AppendSeparator()
         
@@ -801,6 +819,41 @@ class MainFrame(wx.Frame):
         except Exception as e:
             wx.MessageBox(f"打开方案管理失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
     
+    def on_debug_mode(self, event):
+        """调试模式切换事件"""
+        try:
+            # 获取菜单项
+            menu_item = event.GetEventObject()
+            is_checked = menu_item.IsChecked()
+            
+            # 设置调试模式
+            self.logger.set_debug_mode(is_checked)
+            
+            status = "开启" if is_checked else "关闭"
+            wx.MessageBox(f"调试模式已{status}", "提示", wx.OK | wx.ICON_INFORMATION)
+            
+            self.logger.log_ui_event("调试模式切换", f"调试模式{status}")
+            
+        except Exception as e:
+            wx.MessageBox(f"切换调试模式失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+    
+    def on_view_log(self, event):
+        """查看日志事件"""
+        try:
+            from utils.logger import get_logger
+            logger = get_logger()
+            
+            # 打开日志目录
+            log_dir = logger.log_dir
+            if log_dir.exists():
+                os.startfile(log_dir)
+                self.logger.log_ui_event("查看日志", f"打开日志目录: {log_dir}")
+            else:
+                wx.MessageBox("日志目录不存在", "提示", wx.OK | wx.ICON_INFORMATION)
+                
+        except Exception as e:
+            wx.MessageBox(f"打开日志目录失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+    
     def on_help(self, event):
         """帮助事件"""
         try:
@@ -877,21 +930,62 @@ class MainFrame(wx.Frame):
     def on_provider_update(self, event):
         """方案更新事件处理"""
         try:
-            # 保存当前选择的方案
-            current_provider = self.provider_combo.GetValue()
+            from utils.logger import get_logger
+            logger = get_logger()
+            
+            logger.debug("收到方案更新事件")
+            
+            # 添加视觉反馈
+            print("🔄 收到方案更新事件，正在重新加载方案列表...")
+            
+            # 记住当前选中的方案名称
+            current_provider_name = self.provider_combo.GetValue()
+            
+            # 清空当前状态 - 这是最关键的！
+            self.role_list.Clear()
+            self.current_roles = []
+            self.selected_roles = set()
+            self.is_playing = False
+            self.is_loading = False
+            
+            # 停止任何正在进行的播放
+            if hasattr(self, 'current_request_thread') and self.current_request_thread:
+                if self.current_request_thread.is_alive():
+                    # 不能直接终止线程，但可以设置标志
+                    self.is_playing = False
             
             # 重新加载方案列表
+            old_count = len(self.provider_combo.GetItems())
             self._load_config()
+            new_count = len(self.provider_combo.GetItems())
             
-            # 尝试恢复之前选择的方案
-            if current_provider:
-                index = self.provider_combo.FindString(current_provider)
-                if index != wx.NOT_FOUND:
+            print(f"🔄 方案列表已重新加载: {old_count} -> {new_count} 个方案")
+            
+            # 检查之前选中的方案是否还存在
+            if current_provider_name:
+                items = self.provider_combo.GetItems()
+                if current_provider_name in items:
+                    # 如果还存在，重新选中
+                    index = items.index(current_provider_name)
                     self.provider_combo.SetSelection(index)
-                    self.on_provider_changed(None)
+                    print(f"🔄 重新选中方案: {current_provider_name}")
+                else:
+                    # 如果不存在了，清空相关状态
+                    print(f"🔄 方案 '{current_provider_name}' 已删除，清空状态")
+                    self.provider_combo.SetSelection(-1)
+                    self._update_button_states()
+                    self.SetStatusText("方案已删除，请选择其他方案")
+            
+            # 可选：显示一个短暂的状态提示
+            self.SetStatusText("方案列表已更新")
+            
+            logger.debug("方案列表已重新加载")
             
         except Exception as e:
-            print(f"方案更新失败: {e}")
+            from utils.logger import get_logger
+            logger = get_logger()
+            logger.error(f"方案更新失败: {e}")
+            print(f"❌ 方案更新失败: {e}")
     
     def _preview_selected_role(self):
         """试听选中的角色"""

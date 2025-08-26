@@ -13,9 +13,7 @@ from typing import List, Dict, Any, Optional
 from core.provider_manager import ProviderManager
 from core.network_scanner import NetworkScanner
 from ui.config_dialog import ConfigDialog
-
-# 创建自定义事件
-ProviderUpdateEvent, EVT_PROVIDER_UPDATE = wx.lib.newevent.NewEvent()
+from ui.events import ProviderUpdateEvent, EVT_PROVIDER_UPDATE
 
 class ProviderDialog(wx.Dialog):
     """方案管理对话框"""
@@ -46,10 +44,44 @@ class ProviderDialog(wx.Dialog):
     def _send_provider_update_event(self):
         """发送方案更新事件"""
         try:
-            event = ProviderUpdateEvent()
-            wx.PostEvent(self.GetParent(), event)
+            from utils.logger import get_logger
+            logger = get_logger()
+            
+            logger.debug("准备发送方案更新事件")
+            print("📤 准备发送方案更新事件...")
+            
+            # 使用wx.CallAfter确保线程安全
+            def send_event():
+                try:
+                    event = ProviderUpdateEvent()
+                    parent = self.GetParent()
+                    
+                    if parent is None:
+                        print("❌ 父窗口为None，无法发送事件")
+                        return
+                    
+                    print(f"📤 发送事件到父窗口: {type(parent).__name__}")
+                    
+                    # 检查父窗口是否有事件处理方法
+                    if hasattr(parent, 'on_provider_update'):
+                        wx.PostEvent(parent, event)
+                        logger.debug("方案更新事件已发送")
+                        print("📤 方案更新事件已发送")
+                    else:
+                        print("❌ 父窗口没有 on_provider_update 方法")
+                        
+                except Exception as e:
+                    logger.error(f"发送方案更新事件失败: {e}")
+                    print(f"❌ 发送方案更新事件失败: {e}")
+            
+            # 延迟发送，确保对话框销毁后再发送事件
+            wx.CallAfter(send_event)
+            
         except Exception as e:
-            print(f"发送方案更新事件失败: {e}")
+            from utils.logger import get_logger
+            logger = get_logger()
+            logger.error(f"发送方案更新事件失败: {e}")
+            print(f"❌ 发送方案更新事件失败: {e}")
     
     def _init_ui(self):
         """初始化用户界面"""
@@ -204,8 +236,8 @@ class ProviderDialog(wx.Dialog):
                 # 重新加载列表
                 self._load_providers()
                 
-                # 发送方案更新事件
-                self._send_provider_update_event()
+                # 延迟发送事件，确保对话框完全销毁
+                wx.CallAfter(self._send_provider_update_event)
                 
                 wx.MessageBox("方案创建成功", "成功", wx.OK | wx.ICON_INFORMATION)
             
@@ -234,8 +266,8 @@ class ProviderDialog(wx.Dialog):
                 # 重新加载列表
                 self._load_providers()
                 
-                # 发送方案更新事件
-                self._send_provider_update_event()
+                # 延迟发送事件，确保对话框完全销毁
+                wx.CallAfter(self._send_provider_update_event)
                 
                 wx.MessageBox("方案更新成功", "成功", wx.OK | wx.ICON_INFORMATION)
             
@@ -273,8 +305,8 @@ class ProviderDialog(wx.Dialog):
                 # 更新按钮状态
                 self._update_button_states()
                 
-                # 发送方案更新事件
-                self._send_provider_update_event()
+                # 延迟发送事件，确保对话框完全销毁
+                wx.CallAfter(self._send_provider_update_event)
                 
                 wx.MessageBox("方案删除成功", "成功", wx.OK | wx.ICON_INFORMATION)
             

@@ -9,10 +9,11 @@ LegadoTTSTool is a specialized accessibility-first TTS (Text-to-Speech) voice ro
 ### Features
 - 🎯 **完全无障碍**: 100%支持键盘操作，专为盲人用户优化
 - 🔧 **提供商管理**: 支持多种TTS提供商的配置和管理
-- 🌐 **局域网搜索**: 自动发现局域网内的index TTS服务器
+- 🌐 **智能局域网搜索**: 自动发现局域网内的index TTS服务器，支持多服务器选择
 - 🎵 **实时试听**: 支持角色试听和参数调节
 - 📤 **批量导出**: 一键导出为Legado兼容的JSON格式
 - ⚙️ **动态界面**: 根据不同提供商动态生成配置界面
+- ⌨️ **高效键盘导航**: 光标式操作，回车确认，类似方案管理列表体验
 
 ## Development Commands
 
@@ -343,6 +344,10 @@ LegadoTTSTool/
 - Parameter control optimization (TextCtrl replaces Slider for better accessibility)
 - Smart input validation (automatic range limiting and formatting)
 - Real-time accessibility announcements (screen reader feedback for parameter changes)
+- **Server selection dialog keyboard navigation optimization**: Cursor-based operation with Enter confirmation
+- **Multi-server selection interface**: Intelligent LAN discovery with user-friendly server selection dialog
+- **wxWidgets dialog stability fix**: Resolved C++ assertion failures in dialog sizer relationships
+- **Enhanced keyboard accessibility**: Focus-based navigation similar to provider management list
 
 #### Technical Implementation
 - Modular architecture design (UI layer, business logic layer, data storage layer)

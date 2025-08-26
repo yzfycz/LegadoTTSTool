@@ -17,13 +17,21 @@ class ProviderManager:
     def __init__(self):
         """初始化提供商管理器"""
         self.config_file = Path("config/providers.json")
-        self.providers = []
         
         # 确保配置目录存在
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         
-        # 加载配置
-        self._load_config()
+        # 确保配置文件存在
+        self._ensure_config_exists()
+    
+    def _ensure_config_exists(self):
+        """确保配置文件存在"""
+        try:
+            if not self.config_file.exists():
+                # 创建默认配置
+                self._create_default_config()
+        except Exception as e:
+            print(f"确保配置文件存在失败: {e}")
     
     def _load_config(self):
         """加载配置文件"""
@@ -31,25 +39,32 @@ class ProviderManager:
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    self.providers = config.get('providers', [])
+                    return config.get('providers', [])
             else:
                 # 创建默认配置
                 self._create_default_config()
+                return []
                 
         except Exception as e:
             print(f"加载配置文件失败: {e}")
-            self.providers = []
+            return []
     
     def _create_default_config(self):
         """创建默认配置"""
-        self.providers = []
-        self._save_config()
+        config = {
+            'providers': [],
+            'version': '1.0.0',
+            'last_updated': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        }
+        
+        with open(self.config_file, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
     
-    def _save_config(self):
+    def _save_config(self, providers):
         """保存配置文件"""
         try:
             config = {
-                'providers': self.providers,
+                'providers': providers,
                 'version': '1.0.0',
                 'last_updated': time.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
@@ -62,18 +77,20 @@ class ProviderManager:
     
     def get_all_providers(self) -> List[Dict[str, Any]]:
         """获取所有提供商"""
-        return self.providers.copy()
+        return self._load_config().copy()
     
     def get_provider_by_id(self, provider_id: str) -> Optional[Dict[str, Any]]:
         """根据ID获取提供商"""
-        for provider in self.providers:
+        providers = self._load_config()
+        for provider in providers:
             if provider.get('id') == provider_id:
                 return provider
         return None
     
     def get_provider_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         """根据名称获取提供商"""
-        for provider in self.providers:
+        providers = self._load_config()
+        for provider in providers:
             # 检查自定义名称或类型名称
             custom_name = provider.get('custom_name', '')
             provider_type = provider.get('type', '')
@@ -88,6 +105,9 @@ class ProviderManager:
     def add_provider(self, provider_data: Dict[str, Any]) -> str:
         """添加提供商"""
         try:
+            # 获取当前providers
+            providers = self._load_config()
+            
             # 验证必要字段
             if 'type' not in provider_data:
                 raise Exception("提供商类型不能为空")
@@ -105,10 +125,10 @@ class ProviderManager:
             provider_data.setdefault('last_used', None)
             
             # 添加到列表
-            self.providers.append(provider_data)
+            providers.append(provider_data)
             
             # 保存配置
-            self._save_config()
+            self._save_config(providers)
             
             return provider_data['id']
             
@@ -118,18 +138,21 @@ class ProviderManager:
     def update_provider(self, provider_id: str, provider_data: Dict[str, Any]) -> bool:
         """更新提供商"""
         try:
+            # 获取当前providers
+            providers = self._load_config()
+            
             # 查找提供商
-            for i, provider in enumerate(self.providers):
+            for i, provider in enumerate(providers):
                 if provider.get('id') == provider_id:
                     # 保留原始ID和创建时间
                     provider_data['id'] = provider_id
                     provider_data['created_time'] = provider.get('created_time')
                     
                     # 更新提供商数据
-                    self.providers[i] = provider_data
+                    providers[i] = provider_data
                     
                     # 保存配置
-                    self._save_config()
+                    self._save_config(providers)
                     
                     return True
             
@@ -141,13 +164,16 @@ class ProviderManager:
     def delete_provider(self, provider_id: str) -> bool:
         """删除提供商"""
         try:
+            # 获取当前providers
+            providers = self._load_config()
+            
             # 查找并删除提供商
-            for i, provider in enumerate(self.providers):
+            for i, provider in enumerate(providers):
                 if provider.get('id') == provider_id:
-                    del self.providers[i]
+                    del providers[i]
                     
                     # 保存配置
-                    self._save_config()
+                    self._save_config(providers)
                     
                     return True
             
@@ -167,12 +193,14 @@ class ProviderManager:
     def _set_provider_status(self, provider_id: str, enabled: bool) -> bool:
         """设置提供商状态"""
         try:
-            for provider in self.providers:
+            providers = self._load_config()
+            
+            for i, provider in enumerate(providers):
                 if provider.get('id') == provider_id:
                     provider['enabled'] = enabled
                     
                     # 保存配置
-                    self._save_config()
+                    self._save_config(providers)
                     
                     return True
             
@@ -183,17 +211,20 @@ class ProviderManager:
     
     def get_enabled_providers(self) -> List[Dict[str, Any]]:
         """获取启用的提供商"""
-        return [p for p in self.providers if p.get('enabled', True)]
+        providers = self._load_config()
+        return [p for p in providers if p.get('enabled', True)]
     
     def update_last_used(self, provider_id: str):
         """更新最后使用时间"""
         try:
-            for provider in self.providers:
+            providers = self._load_config()
+            
+            for i, provider in enumerate(providers):
                 if provider.get('id') == provider_id:
                     provider['last_used'] = time.strftime('%Y-%m-%dT%H:%M:%SZ')
                     
                     # 保存配置
-                    self._save_config()
+                    self._save_config(providers)
                     
                     break
                     
@@ -249,12 +280,13 @@ class ProviderManager:
     
     def get_provider_statistics(self) -> Dict[str, Any]:
         """获取提供商统计信息"""
-        total_providers = len(self.providers)
-        enabled_providers = len(self.get_enabled_providers())
+        providers = self._load_config()
+        total_providers = len(providers)
+        enabled_providers = len([p for p in providers if p.get('enabled', True)])
         
         # 按类型统计
         type_counts = {}
-        for provider in self.providers:
+        for provider in providers:
             provider_type = provider.get('type', 'unknown')
             type_counts[provider_type] = type_counts.get(provider_type, 0) + 1
         
@@ -281,9 +313,7 @@ class ProviderManager:
             import shutil
             shutil.copy2(backup_path, self.config_file)
             
-            # 重新加载配置
-            self._load_config()
-            
+            # 验证配置文件是否正确恢复
             return True
         except Exception as e:
             print(f"恢复配置文件失败: {e}")
@@ -292,8 +322,9 @@ class ProviderManager:
     def export_config(self, export_path: str) -> bool:
         """导出配置文件"""
         try:
+            providers = self._load_config()
             config = {
-                'providers': self.providers,
+                'providers': providers,
                 'version': '1.0.0',
                 'exported_at': time.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
@@ -316,8 +347,11 @@ class ProviderManager:
                 if 'providers' not in config:
                     raise Exception("配置文件格式不正确")
                 
+                # 获取当前providers
+                current_providers = self._load_config()
+                
                 # 合并配置
-                existing_ids = {p.get('id') for p in self.providers}
+                existing_ids = {p.get('id') for p in current_providers}
                 
                 for provider in config['providers']:
                     # 生成新的ID避免冲突
@@ -328,10 +362,10 @@ class ProviderManager:
                     provider['created_time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ')
                     provider['last_used'] = None
                     
-                    self.providers.append(provider)
+                    current_providers.append(provider)
                 
                 # 保存配置
-                self._save_config()
+                self._save_config(current_providers)
                 
                 return True
                 

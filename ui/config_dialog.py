@@ -9,7 +9,9 @@ import wx
 import wx.lib.scrolledpanel
 import uuid
 import time
-from typing import Dict, Any, Optional
+from typing import List, Dict, Any, Optional
+
+from core.network_scanner import NetworkScanner
 
 class ConfigDialog(wx.Dialog):
     """方案配置对话框"""
@@ -331,24 +333,160 @@ class ConfigDialog(wx.Dialog):
     def _scan_network_thread(self, button):
         """在后台线程中搜索局域网"""
         try:
-            # 这里应该调用网络扫描器
-            # 暂时模拟搜索结果
-            import time
-            time.sleep(2)
+            # 使用真正的网络扫描器
+            scanner = NetworkScanner()
             
-            # 模拟找到服务器
-            server_data = {
-                'address': '192.168.1.100',
-                'web_port': 7860,
-                'synth_port': 9880
-            }
+            # 仅扫描服务器，不涉及UI操作
+            scan_result = scanner.scan_and_select_server()
             
-            # 在主线程中更新界面
-            wx.CallAfter(self._update_server_config, server_data, button)
+            # 在主线程中处理结果和UI操作
+            wx.CallAfter(self._handle_scan_result, scan_result, button)
             
         except Exception as e:
             wx.CallAfter(wx.MessageBox, f"搜索失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
-            wx.CallAfter(self._restore_scan_button, button)
+    
+    def _handle_scan_result(self, scan_result, button):
+        """在主线程中处理扫描结果"""
+        try:
+            if scan_result is None:
+                # 没有找到服务器
+                wx.MessageBox("未在局域网找到index TTS服务器", "提示", wx.OK | wx.ICON_INFORMATION)
+                
+                # 使用默认地址
+                from utils.network_info import get_primary_network_segment
+                primary_segment = get_primary_network_segment()
+                
+                if primary_segment:
+                    server_data = {
+                        'address': f"{primary_segment}.100",
+                        'web_port': 7860,
+                        'synth_port': 9880
+                    }
+                else:
+                    server_data = {
+                        'address': '127.0.0.1',
+                        'web_port': 7860,
+                        'synth_port': 9880
+                    }
+                    
+            elif isinstance(scan_result, dict):
+                # 只有一个服务器，直接使用
+                server_data = {
+                    'address': scan_result['address'],
+                    'web_port': scan_result.get('web_port', 7860),
+                    'synth_port': scan_result.get('synth_port', 9880)
+                }
+                
+            elif isinstance(scan_result, list):
+                # 多个服务器，让用户选择
+                selected_server = self._let_user_choose_server(scan_result)
+                if selected_server:
+                    server_data = {
+                        'address': selected_server['address'],
+                        'web_port': selected_server.get('web_port', 7860),
+                        'synth_port': selected_server.get('synth_port', 9880)
+                    }
+                else:
+                    # 用户取消了选择，使用默认地址
+                    from utils.network_info import get_primary_network_segment
+                    primary_segment = get_primary_network_segment()
+                    
+                    if primary_segment:
+                        server_data = {
+                            'address': f"{primary_segment}.100",
+                            'web_port': 7860,
+                            'synth_port': 9880
+                        }
+                    else:
+                        server_data = {
+                            'address': '127.0.0.1',
+                            'web_port': 7860,
+                            'synth_port': 9880
+                        }
+            
+            # 更新界面配置
+            self._update_server_config(server_data, button)
+            
+        except Exception as e:
+            wx.MessageBox(f"处理搜索结果失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+    
+    def _let_user_choose_server(self, servers: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """让用户选择服务器（在主线程中调用）"""
+        try:
+            # 创建选择对话框 - 使用最简单的方式
+            dialog = wx.Dialog(self, title="选择TTS服务器", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+            
+            # 直接在dialog上创建控件，不使用panel
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+            
+            # 添加提示文本
+            prompt = wx.StaticText(dialog, label="找到多个TTS服务器，请选择一个：")
+            main_sizer.Add(prompt, 0, wx.ALL, 10)
+            
+            # 添加服务器列表
+            list_ctrl = wx.ListCtrl(dialog, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+            list_ctrl.InsertColumn(0, "地址", width=120)
+            list_ctrl.InsertColumn(1, "Web端口", width=80)
+            list_ctrl.InsertColumn(2, "合成端口", width=80)
+            list_ctrl.InsertColumn(3, "状态", width=80)
+            
+            # 添加服务器到列表
+            scanner = NetworkScanner()
+            for i, server in enumerate(servers):
+                address = server['address']
+                web_port = str(server.get('web_port', 'N/A'))
+                synth_port = str(server.get('synth_port', 'N/A'))
+                
+                # 检查服务器状态
+                status = "可用" if scanner._check_server_status(server) else "不可用"
+                
+                index = list_ctrl.InsertItem(i, address)
+                list_ctrl.SetItem(index, 1, web_port)
+                list_ctrl.SetItem(index, 2, synth_port)
+                list_ctrl.SetItem(index, 3, status)
+            
+            main_sizer.Add(list_ctrl, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+            
+            # 绑定键盘事件，支持回车键确定
+            list_ctrl.Bind(wx.EVT_KEY_DOWN, lambda event: self._on_list_key_down(event, dialog, servers, list_ctrl))
+            
+            # 添加按钮 - 使用dialog作为父窗口
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            
+            # 创建确定按钮
+            ok_button = wx.Button(dialog, wx.ID_OK, "确定")
+            button_sizer.Add(ok_button, 0, wx.RIGHT, 5)
+            
+            # 创建取消按钮
+            cancel_button = wx.Button(dialog, wx.ID_CANCEL, "取消")
+            button_sizer.Add(cancel_button, 0, wx.LEFT, 5)
+            
+            main_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+            
+            # 设置dialog的sizer
+            dialog.SetSizer(main_sizer)
+            dialog.SetSize((500, 300))
+            
+            # 自动将焦点设置到第一行（如果有的话）
+            if list_ctrl.GetItemCount() > 0:
+                list_ctrl.SetItemState(0, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED)
+            
+            # 显示对话框
+            if dialog.ShowModal() == wx.ID_OK:
+                selected_index = list_ctrl.GetFirstSelected()
+                if selected_index != -1:
+                    chosen_server = servers[selected_index]
+                    dialog.Destroy()
+                    return chosen_server
+                else:
+                    wx.MessageBox("请先选择一个服务器", "提示", wx.OK | wx.ICON_INFORMATION)
+            
+            dialog.Destroy()
+            return None
+            
+        except Exception as e:
+            print(f"显示服务器选择对话框失败: {e}")
+            return None
     
     def _update_server_config(self, server_data, button):
         """更新服务器配置"""
@@ -513,3 +651,56 @@ class ConfigDialog(wx.Dialog):
     def get_config_data(self):
         """获取配置数据"""
         return self.config_data
+    
+    def _on_list_key_down(self, event, dialog, servers, list_ctrl):
+        """处理服务器列表的键盘事件"""
+        try:
+            # 获取按键代码
+            key_code = event.GetKeyCode()
+            
+            # 如果按下回车键
+            if key_code == wx.WXK_RETURN:
+                # 获取光标所在的行
+                focused_item = list_ctrl.GetFocusedItem()
+                
+                if focused_item != -1:
+                    # 光标在某一行上，直接返回该行的服务器
+                    chosen_server = servers[focused_item]
+                    dialog.EndModal(wx.ID_OK)
+                    return
+            
+            # 如果按下ESC键
+            elif key_code == wx.WXK_ESCAPE:
+                # 直接关闭对话框
+                dialog.EndModal(wx.ID_CANCEL)
+                return
+            
+            # 处理上下键移动光标
+            elif key_code == wx.WXK_UP:
+                # 向上移动光标并自动获得焦点
+                focused_item = list_ctrl.GetFocusedItem()
+                if focused_item > 0:
+                    # 清除原来的焦点和选中状态
+                    list_ctrl.SetItemState(focused_item, 0, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED)
+                    # 设置新的焦点和选中状态
+                    list_ctrl.SetItemState(focused_item - 1, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED)
+                    list_ctrl.EnsureVisible(focused_item - 1)
+                return
+            
+            elif key_code == wx.WXK_DOWN:
+                # 向下移动光标并自动获得焦点
+                focused_item = list_ctrl.GetFocusedItem()
+                if focused_item < list_ctrl.GetItemCount() - 1:
+                    # 清除原来的焦点和选中状态
+                    list_ctrl.SetItemState(focused_item, 0, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED)
+                    # 设置新的焦点和选中状态
+                    list_ctrl.SetItemState(focused_item + 1, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED, wx.LIST_STATE_FOCUSED | wx.LIST_STATE_SELECTED)
+                    list_ctrl.EnsureVisible(focused_item + 1)
+                return
+            
+            # 其他按键交给默认处理
+            event.Skip()
+            
+        except Exception as e:
+            print(f"处理键盘事件失败: {e}")
+            event.Skip()
