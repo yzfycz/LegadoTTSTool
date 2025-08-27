@@ -141,7 +141,7 @@ class MainFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 试听文本标签
-        preview_label = wx.StaticText(parent, label="语音试听文本(&P):")
+        preview_label = wx.StaticText(parent, label="语音试听文本(&X):")
         sizer.Add(preview_label, 0, wx.LEFT | wx.TOP, 5)
         
         # 试听文本框
@@ -158,7 +158,7 @@ class MainFrame(wx.Frame):
         
         # 语速控制 - 使用TextCtrl
         speed_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        speed_label = wx.StaticText(parent, label="语速(&E):")
+        speed_label = wx.StaticText(parent, label="语速(&P):")
         self.speed_text = wx.TextCtrl(
             parent,
             value="1.0",
@@ -411,8 +411,7 @@ class MainFrame(wx.Frame):
             # 添加状态提示
             self.role_list.Append("正在获取音色...")
             
-            # 禁用刷新按钮，显示进度
-            self.refresh_button.Enable(False)
+            # 不禁用按钮以保持快捷键功能，只改变标签显示状态
             self.refresh_button.SetLabel("正在刷新...")
             
             # 在后台线程中刷新角色
@@ -424,8 +423,8 @@ class MainFrame(wx.Frame):
             
         except Exception as e:
             wx.MessageBox(f"刷新角色失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
-            self.refresh_button.Enable(True)
-            self.refresh_button.SetLabel("刷新语音角色")
+            # 恢复按钮标签
+            self.refresh_button.SetLabel("刷新语音角色(&R)")
     
     def _refresh_roles_thread(self, provider):
         """在后台线程中刷新角色列表"""
@@ -444,9 +443,8 @@ class MainFrame(wx.Frame):
     
     def on_role_update(self, event):
         """角色更新事件处理"""
-        # 恢复刷新按钮
-        self.refresh_button.Enable(True)
-        self.refresh_button.SetLabel("刷新语音角色")
+        # 恢复按钮标签
+        self.refresh_button.SetLabel("刷新语音角色(&R)")
         
         if hasattr(event, 'error'):
             wx.MessageBox(f"获取角色列表失败: {event.error}", "错误", wx.OK | wx.ICON_ERROR)
@@ -466,6 +464,9 @@ class MainFrame(wx.Frame):
         
         # 更新按钮状态
         self._update_button_states()
+        
+        # 恢复刷新按钮标签
+        self.refresh_button.SetLabel("刷新语音角色(&R)")
         
         # 成功时不显示弹窗，直接显示结果
     
@@ -1015,8 +1016,7 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("请输入试听文本", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
-            # 禁用试听按钮，显示进度，启用停止按钮
-            self.preview_button.Enable(False)
+            # 不禁用按钮以保持快捷键功能，只改变标签显示状态
             self.preview_button.SetLabel("正在试听...")
             self.stop_button.Enable(True)
             self.is_loading = True
@@ -1031,6 +1031,11 @@ class MainFrame(wx.Frame):
             
         except Exception as e:
             wx.MessageBox(f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            # 恢复按钮状态
+            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.stop_button.Enable(False)
+            self.is_playing = False
+            self.is_loading = False
     
     def _preview_thread(self, provider, role, text, speed, volume):
         """在后台线程中试听"""
@@ -1057,8 +1062,8 @@ class MainFrame(wx.Frame):
             if self.is_loading:  # 只有没有取消时才显示错误
                 wx.CallAfter(wx.MessageBox, f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
         finally:
-            # 恢复试听按钮
-            wx.CallAfter(self._restore_preview_button)
+            # 简单恢复按钮状态，不调用复杂的恢复函数
+            wx.CallAfter(self._simple_restore_preview_button)
     
     def _play_audio(self, audio_data):
         """播放音频"""
@@ -1089,13 +1094,229 @@ class MainFrame(wx.Frame):
         finally:
             self.is_playing = False
     
+    def _simple_restore_preview_button(self):
+        """简单恢复试听按钮状态（不涉及复杂的焦点管理）"""
+        try:
+            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.stop_button.Enable(False)
+            self.is_playing = False
+            self.is_loading = False
+            print("简单恢复试听按钮状态")
+        except Exception as e:
+            print(f"简单恢复试听按钮失败: {e}")
+    
     def _restore_preview_button(self):
         """恢复试听按钮"""
-        self.preview_button.Enable(True)
-        self.preview_button.SetLabel("试听选中角色")
+        # 恢复按钮标签和状态
+        self.preview_button.SetLabel("试听选中角色(&T)")
         self.stop_button.Enable(False)
         self.is_playing = False
         self.is_loading = False
+    
+    def _recreate_refresh_button(self):
+        """重新创建刷新按钮以恢复快捷键功能"""
+        try:
+            # 获取按钮的父容器和sizer
+            parent = self.refresh_button.GetParent()
+            sizer = self.refresh_button.GetContainingSizer()
+            
+            if not parent or not sizer:
+                print("无法获取按钮的父容器或sizer")
+                return
+            
+            # 保存按钮的原始标签和位置信息
+            original_label = "刷新语音角色(&R)"  # 直接使用标准标签
+            
+            # 查找按钮在sizer中的位置
+            index = -1
+            for i, child in enumerate(sizer.GetChildren()):
+                if child.GetWindow() == self.refresh_button:
+                    index = i
+                    break
+            
+            if index == -1:
+                print("无法在sizer中找到按钮")
+                return
+            
+            # 保存原有样式和位置信息
+            sizer_item = sizer.GetItem(index)
+            original_style = sizer_item.GetFlag()
+            original_border = sizer_item.GetBorder()
+            
+            print(f"刷新按钮原始位置: {index}")
+            print(f"刷新按钮原始样式: flag={original_style}, border={original_border}")
+            
+            # 先从sizer中移除旧按钮
+            sizer.Remove(index)
+            
+            # 销毁旧按钮
+            self.refresh_button.Destroy()
+            
+            # 创建新按钮
+            self.refresh_button = wx.Button(parent, label=original_label)
+            self.refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh_roles)
+            
+            # 使用原有样式添加到sizer中
+            sizer.Insert(index, self.refresh_button, original_style, original_border)
+            
+            # 重新布局
+            sizer.Layout()
+            parent.Layout()
+            
+            # 修复键盘导航顺序 - 将新按钮移动到正确的Tab顺序位置
+            self._fix_tab_order(parent, self.refresh_button, index)
+            
+            print(f"刷新按钮重新创建成功，位置: {index}")
+            
+        except Exception as e:
+            print(f"重新创建刷新按钮失败: {e}")
+            # 如果重新创建失败，尝试简单恢复标签
+            if hasattr(self, 'refresh_button'):
+                try:
+                    self.refresh_button.SetLabel("刷新语音角色(&R)")
+                except:
+                    pass
+    
+    def _recreate_preview_button(self):
+        """重新创建试听按钮以恢复快捷键功能"""
+        try:
+            # 获取按钮的父容器和sizer
+            parent = self.preview_button.GetParent()
+            sizer = self.preview_button.GetContainingSizer()
+            
+            if not parent or not sizer:
+                print("无法获取试听按钮的父容器或sizer")
+                return
+            
+            # 保存按钮的原始标签
+            original_label = "试听选中角色(&T)"  # 直接使用标准标签
+            
+            # 查找按钮在sizer中的位置
+            index = -1
+            for i, child in enumerate(sizer.GetChildren()):
+                if child.GetWindow() == self.preview_button:
+                    index = i
+                    break
+            
+            if index == -1:
+                print("无法在sizer中找到试听按钮")
+                return
+            
+            # 保存原有样式和位置信息
+            sizer_item = sizer.GetItem(index)
+            original_style = sizer_item.GetFlag()
+            original_border = sizer_item.GetBorder()
+            
+            print(f"试听按钮原始位置: {index}")
+            print(f"试听按钮原始样式: flag={original_style}, border={original_border}")
+            
+            # 先从sizer中移除旧按钮
+            sizer.Remove(index)
+            
+            # 销毁旧按钮
+            self.preview_button.Destroy()
+            
+            # 创建新按钮
+            self.preview_button = wx.Button(parent, label=original_label)
+            self.preview_button.Bind(wx.EVT_BUTTON, self.on_preview_button)
+            
+            # 使用原有样式添加到sizer中
+            sizer.Insert(index, self.preview_button, original_style, original_border)
+            
+            # 重新布局
+            sizer.Layout()
+            parent.Layout()
+            
+            # 修复键盘导航顺序 - 将新按钮移动到正确的Tab顺序位置
+            self._fix_tab_order(parent, self.preview_button, index)
+            
+            print(f"试听按钮重新创建成功，位置: {index}")
+            
+        except Exception as e:
+            print(f"重新创建试听按钮失败: {e}")
+            # 如果重新创建失败，尝试简单恢复标签
+            if hasattr(self, 'preview_button'):
+                try:
+                    self.preview_button.SetLabel("试听选中角色(&T)")
+                except:
+                    pass
+    
+    def _fix_tab_order(self, parent, new_button, desired_sizer_index):
+        """修复按钮的键盘导航顺序 - 使用更简单的方法"""
+        try:
+            # 获取父容器中的所有子控件，保持sizer顺序
+            children = parent.GetChildren()
+            
+            # 按照sizer中的顺序找到所有按钮控件
+            button_windows = []
+            for child in children:
+                window = child.GetWindow()
+                if window and isinstance(window, wx.Button) and window.IsShown():
+                    button_windows.append(window)
+            
+            # 找到新按钮在按钮列表中的位置
+            current_button_pos = -1
+            for i, button in enumerate(button_windows):
+                if button == new_button:
+                    current_button_pos = i
+                    break
+            
+            # 如果新按钮不在期望的位置，调整Tab顺序
+            if current_button_pos != desired_sizer_index and current_button_pos != -1:
+                # 简单策略：将按钮按照sizer顺序重新排列Tab顺序
+                if desired_sizer_index < len(button_windows):
+                    if desired_sizer_index > 0:
+                        # 移动到指定按钮的后面
+                        target_button = button_windows[desired_sizer_index - 1]
+                        new_button.MoveAfterInTabOrder(target_button)
+                    else:
+                        # 移动到第一个按钮的前面
+                        first_button = button_windows[0]
+                        new_button.MoveBeforeInTabOrder(first_button)
+                    
+                    print(f"已调整按钮Tab顺序从位置 {current_button_pos} 到 {desired_sizer_index}")
+            
+        except Exception as e:
+            print(f"修复Tab顺序失败: {e}")
+    
+    def _save_current_focus(self):
+        """保存当前焦点控件"""
+        try:
+            focused_window = self.FindFocus()
+            if focused_window:
+                self._last_focused_window = focused_window
+                print(f"已保存当前焦点: {focused_window.GetName() if hasattr(focused_window, 'GetName') else 'Unknown'}")
+        except Exception as e:
+            print(f"保存焦点失败: {e}")
+    
+    def _restore_saved_focus(self):
+        """恢复之前保存的焦点"""
+        try:
+            if hasattr(self, '_last_focused_window') and self._last_focused_window:
+                # 检查控件是否还存在且可见
+                if self._last_focused_window.IsShown():
+                    self._last_focused_window.SetFocus()
+                    print("已恢复之前保存的焦点")
+                    return True
+                else:
+                    print("之前聚焦的控件已不可见")
+            return False
+        except Exception as e:
+            print(f"恢复焦点失败: {e}")
+            return False
+    
+    def _reset_button_shortcuts(self):
+        """重置按钮快捷键功能的简单方法"""
+        try:
+            # 只恢复按钮标签，不涉及焦点管理
+            if hasattr(self, 'refresh_button'):
+                self.refresh_button.SetLabel("刷新语音角色(&R)")
+            
+            if hasattr(self, 'preview_button'):
+                self.preview_button.SetLabel("试听选中角色(&T)")
+            
+        except Exception as e:
+            print(f"重置按钮快捷键失败: {e}")
     
     def on_preview_button(self, event):
         """试听按钮事件"""
@@ -1116,15 +1337,20 @@ class MainFrame(wx.Frame):
                 self.is_playing = False
                 
             if self.is_loading:
-                # 取消正在进行的请求（设置标志让线程检查）
+                # 取消正在进行的请求
                 self.is_loading = False
                 
             # 恢复按钮状态
-            self._restore_preview_button()
+            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.stop_button.Enable(False)
             
         except Exception as e:
             print(f"停止播放失败: {e}")
-            self._restore_preview_button()
+            # 确保按钮状态恢复
+            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.stop_button.Enable(False)
+            self.is_playing = False
+            self.is_loading = False
     
     def _update_button_states(self):
         """更新按钮状态"""

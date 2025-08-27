@@ -13,7 +13,7 @@ LegadoTTSTool is a specialized accessibility-first TTS (Text-to-Speech) voice ro
 - 🎵 **实时试听**: 支持角色试听和参数调节
 - 📤 **批量导出**: 一键导出为Legado兼容的JSON格式
 - ⚙️ **动态界面**: 根据不同提供商动态生成配置界面
-- ⌨️ **高效键盘导航**: 光标式操作，回车确认，类似方案管理列表体验
+- ⌨️ **完整键盘快捷键系统**: 所有控件都有唯一的Alt+key快捷键，无冲突设计
 - 🚀 **高性能网络扫描**: 实时进度显示，智能IP过滤，并行端口检查，可配置性能参数，Unicode安全输出处理
 
 ## Development Commands
@@ -312,11 +312,17 @@ The application includes proper resource cleanup to prevent RecursionError on ex
 ### Main Interface Controls
 - **Alt+C**: Open operation menu
 - **Alt+S**: Focus scheme selection
+- **Alt+L**: Focus voice role list
 - **Alt+R**: Refresh role list
+- **Alt+X**: Focus preview text input
+- **Alt+P**: Focus speed control (Pace)
+- **Alt+V**: Focus volume control
+- **Alt+T**: Preview selected role
+- **Alt+O**: Stop audio playback
 - **Space**: Select/deselect roles
 - **Enter**: Preview selected role
 - **Alt+A**: Select all roles
-- **Alt+D**: Deselect roles
+- **Alt+D**: Deselect roles (Inverse selection)
 - **Alt+E**: Export JSON
 
 ### Interface Characteristics
@@ -393,6 +399,10 @@ LegadoTTSTool/
   - Parameter control optimization
   - Smart input validation
   - Real-time accessibility announcements
+  - **Complete keyboard shortcut system**: Unique Alt+key shortcuts for all controls
+  - **Shortcut conflict resolution**: Resolved conflicts between export and parameter controls
+  - **Simplified button state management**: Streamlined reset logic for improved stability
+  - **Enhanced shortcut reliability**: Improved persistence after button operations
   
 - **Advanced Network Scanning System**
   - **Full network segment scanning**: Complete IP range (1-255) coverage for comprehensive server discovery
@@ -453,6 +463,25 @@ LegadoTTSTool/
 - Screen reader support (NVDA, JAWS recommended)
 
 ## Changelog
+
+### [1.1.1] - 2024-08-27
+
+#### New Features
+- **Complete Keyboard Shortcut System**: Comprehensive Alt+key shortcuts for all interface controls
+- **Shortcut Conflict Resolution**: Resolved conflicts between export and speed control shortcuts
+- **Enhanced Accessibility**: Improved keyboard navigation with unique shortcuts for all controls
+
+#### Keyboard Shortcut Updates
+- **Speed Control**: Changed from Alt+E to Alt+P (Pace) to avoid conflict with export
+- **Preview Text**: Changed from Alt+P to Alt+X (Te**X**t) to avoid conflict with speed
+- **Export Function**: Maintained Alt+E (Export) without conflicts
+- **Voice Role List**: Added Alt+L for direct list focus
+- **Stop Playback**: Added Alt+O for stopping audio playback
+
+#### Technical Improvements
+- **Simplified Button State Management**: Streamlined button label reset logic for improved stability
+- **Enhanced Shortcut Reliability**: Improved shortcut key persistence after button operations
+- **Optimized Focus Management**: Simplified focus handling to prevent navigation issues
 
 ### [1.1.0] - 2024-08-27
 
