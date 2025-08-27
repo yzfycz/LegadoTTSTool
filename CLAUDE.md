@@ -317,22 +317,28 @@ The application includes proper resource cleanup to prevent RecursionError on ex
 - **Alt+X**: Focus preview text input
 - **Alt+P**: Focus speed control (Pace)
 - **Alt+V**: Focus volume control
-- **Alt+T**: Preview selected role
+- **Alt+T**: Preview current role
 - **Alt+O**: Stop audio playback
 - **Space**: Select/deselect roles
-- **Enter**: Preview selected role
+- **Enter**: Navigate to role (no preview)
 - **Alt+A**: Select all roles
 - **Alt+D**: Deselect roles (Inverse selection)
 - **Alt+E**: Export JSON
 
 ### Interface Characteristics
-- **Real-time status display**: Shows "正在获取音色" status when refreshing roles
+- **Real-time status display**: Shows refresh status via button labels when refreshing roles
 - **Smart filtering**: Automatically filters "使用参考音频" and special options
 - **Non-disruptive experience**: Direct result display without popup dialogs
 - **Real-time updates**: Provider configuration changes take effect immediately
 - **Parameter control optimization**: Speed and volume use text input with keyboard control
 - **Smart validation**: Automatic range limiting (0.5-2.0) with one decimal formatting
 - **Accessibility announcements**: Screen reader feedback for parameter changes
+
+### Function Design Principles
+- **Preview Function**: Preview is only available via the preview button (Alt+T shortcut). It's based on cursor position (current focused role), not checkbox selection state. Users navigate with arrow keys to focus a role, then press Alt+T to preview it.
+- **Selection Function**: Spacebar is used only for selecting/deselecting roles for batch export operations. Selection state is independent from preview functionality.
+- **Independent Operations**: Preview and selection are separate functions - users can preview any focused role via Alt+T, while independently selecting multiple roles for export using spacebar.
+- **Restricted Triggers**: Only the preview button and Alt+T shortcut can trigger preview. Double-click and Enter key do not trigger preview.
 
 ## Project Structure
 
@@ -463,6 +469,25 @@ LegadoTTSTool/
 - Screen reader support (NVDA, JAWS recommended)
 
 ## Changelog
+
+### [1.1.2] - 2024-08-27
+
+#### New Features
+- **Enhanced Preview Logic**: Preview function now based on cursor position rather than selection state
+- **Improved User Experience**: Removed unnecessary "正在获取音色" placeholder text during refresh
+- **Clearer Function Separation**: Independent preview and selection operations for better usability
+- **Restricted Preview Triggers**: Preview only available via preview button or Alt+T shortcut
+
+#### Function Design Improvements
+- **Preview Function**: Only Alt+T shortcut can preview the role currently under cursor focus, regardless of checkbox selection
+- **Selection Function**: Spacebar selection is now purely for batch export operations
+- **Button Label Updates**: Changed "试听选中角色" to "试听当前角色" to reflect actual functionality
+- **No Accidental Preview**: Double-click and Enter key no longer trigger preview to prevent accidental playback
+
+#### Technical Improvements
+- **Cleaner Refresh Process**: Removed temporary placeholder items during role list refresh
+- **Better State Management**: Improved separation between navigation focus and selection state
+- **Simplified Event Handling**: Removed preview triggers from double-click and Enter key events
 
 ### [1.1.1] - 2024-08-27
 

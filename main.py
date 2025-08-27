@@ -37,16 +37,24 @@ class LegadoTTSApp(wx.App):
             self.provider_manager = ProviderManager()
             
             # 创建主窗口
+            print("正在创建主窗口...")
             self.frame = MainFrame(None, title="LegadoTTSTool - 语音合成角色导出工具")
             self.frame.Centre()
             self.frame.Show()
+            print("主窗口创建成功")
             
             # 设置无障碍支持
+            print("正在设置无障碍支持...")
             self._setup_accessibility()
+            print("无障碍支持设置完成")
             
             return True
             
         except Exception as e:
+            import traceback
+            print(f"程序初始化失败: {str(e)}")
+            print("详细错误信息:")
+            traceback.print_exc()
             wx.MessageBox(f"程序初始化失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
             return False
     

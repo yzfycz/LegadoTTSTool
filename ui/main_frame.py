@@ -20,6 +20,7 @@ from core.json_exporter import JSONExporter
 from core.network_scanner import NetworkScanner
 from utils.file_utils import FileUtils
 from utils.accessibility import AccessibilityUtils
+from utils.accessible_role_list import AccessibleRoleList
 from ui.events import RoleUpdateEvent, EVT_ROLE_UPDATE, ScanCompleteEvent, EVT_SCAN_COMPLETE, ProviderUpdateEvent, EVT_PROVIDER_UPDATE
 
 
@@ -126,11 +127,11 @@ class MainFrame(wx.Frame):
         list_label = wx.StaticText(parent, label="语音角色(&L)：")
         sizer.Add(list_label, 0, wx.LEFT | wx.TOP, 5)
         
-        # 角色列表
-        self.role_list = wx.CheckListBox(parent, choices=[], style=wx.LB_SINGLE)
-        self.role_list.Bind(wx.EVT_CHECKLISTBOX, self.on_role_selected)
-        self.role_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_role_double_click)
-        self.role_list.Bind(wx.EVT_KEY_DOWN, self.on_role_key_down)
+        # 角色列表 - 使用具有无障碍支持的角色列表
+        self.role_list = AccessibleRoleList(parent, choices=[], name="语音角色列表")
+        self.role_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_role_selected)
+        self.role_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_role_double_click)
+        self.role_list.Bind(wx.EVT_LIST_KEY_DOWN, self.on_role_key_down)
         
         sizer.Add(self.role_list, 1, wx.EXPAND | wx.TOP, 5)
         
@@ -201,7 +202,7 @@ class MainFrame(wx.Frame):
         volume_sizer.Add(self.volume_text, 0, wx.ALIGN_CENTER_VERTICAL)
         
         # 试听按钮
-        self.preview_button = wx.Button(parent, label="试听选中角色(&T)")
+        self.preview_button = wx.Button(parent, label="试听当前角色(&T)")
         self.preview_button.Bind(wx.EVT_BUTTON, self.on_preview_button)
         
         # 停止按钮
@@ -312,10 +313,9 @@ class MainFrame(wx.Frame):
     def _setup_accessibility(self):
         """设置无障碍支持"""
         try:
-            # 为控件设置无障碍名称
+            # 为控件设置无障碍名称（role_list现在有自己完整的无障碍支持）
             self.accessibility.set_control_name(self.provider_combo, "方案选择")
             self.accessibility.set_control_name(self.refresh_button, "刷新语音角色按钮")
-            self.accessibility.set_control_name(self.role_list, "语音角色")
             self.accessibility.set_control_name(self.preview_text, "语音试听文本")
             # 文本框已设置名称，无需额外设置
             self.accessibility.set_control_name(self.preview_button, "试听按钮")
@@ -408,9 +408,7 @@ class MainFrame(wx.Frame):
             self.current_roles = []
             self.selected_roles = set()
             
-            # 添加状态提示
-            self.role_list.Append("正在获取音色...")
-            
+                        
             # 不禁用按钮以保持快捷键功能，只改变标签显示状态
             self.refresh_button.SetLabel("正在刷新...")
             
@@ -472,37 +470,25 @@ class MainFrame(wx.Frame):
     
     def on_role_selected(self, event):
         """角色选择事件"""
-        index = event.GetInt()
-        if self.role_list.IsChecked(index):
-            self.selected_roles.add(self.current_roles[index])
-        else:
-            self.selected_roles.discard(self.current_roles[index])
+        index = event.GetIndex()
+        if index >= 0 and index < len(self.current_roles):
+            if self.role_list.IsChecked(index):
+                self.selected_roles.add(self.current_roles[index])
+            else:
+                self.selected_roles.discard(self.current_roles[index])
         
         self._update_button_states()
     
     def on_role_double_click(self, event):
-        """角色双击事件"""
-        self._preview_selected_role()
+        """角色双击事件 - 不进行试听，只处理选中状态"""
+        # 双击时不进行试听，只让默认的选中状态处理生效
+        event.Skip()
     
     def on_role_key_down(self, event):
-        """角色列表键盘事件"""
-        keycode = event.GetKeyCode()
-        
-        if keycode == wx.WXK_RETURN:
-            # 回车键试听
-            self._preview_selected_role()
-        elif keycode == wx.WXK_SPACE:
-            # 空格键切换选择状态
-            index = self.role_list.GetSelection()
-            if index != wx.NOT_FOUND:
-                self.role_list.Check(index, not self.role_list.IsChecked(index))
-                if self.role_list.IsChecked(index):
-                    self.selected_roles.add(self.current_roles[index])
-                else:
-                    self.selected_roles.discard(self.current_roles[index])
-                self._update_button_states()
-        else:
-            event.Skip()
+        """角色列表键盘事件 - 所有按键都由AccessibleRoleList处理，不进行试听"""
+        # 所有按键事件都交给默认处理（AccessibleRoleList会处理）
+        # 回车键不再进行试听，只能通过试听按钮或Alt+T快捷键试听
+        event.Skip()
     
     def _slider_to_value(self, slider_pos):
         """将滑动条位置转换为实际数值 (0-15 -> 0.5-2.0)"""
@@ -901,7 +887,7 @@ class MainFrame(wx.Frame):
             # 停止试听相关的线程
             if hasattr(self, 'preview_button'):
                 self.preview_button.Enable(True)
-                self.preview_button.SetLabel("试听选中角色")
+                self.preview_button.SetLabel("试听当前角色")
             
             # 清理TTS客户端资源
             if hasattr(self, 'tts_client'):
@@ -993,7 +979,7 @@ class MainFrame(wx.Frame):
         try:
             # 获取选中的角色
             index = self.role_list.GetSelection()
-            if index == wx.NOT_FOUND:
+            if index < 0:
                 wx.MessageBox("请先选择一个角色", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
@@ -1032,7 +1018,7 @@ class MainFrame(wx.Frame):
         except Exception as e:
             wx.MessageBox(f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
             # 恢复按钮状态
-            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.preview_button.SetLabel("试听当前角色(&T)")
             self.stop_button.Enable(False)
             self.is_playing = False
             self.is_loading = False
@@ -1097,7 +1083,7 @@ class MainFrame(wx.Frame):
     def _simple_restore_preview_button(self):
         """简单恢复试听按钮状态（不涉及复杂的焦点管理）"""
         try:
-            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.preview_button.SetLabel("试听当前角色(&T)")
             self.stop_button.Enable(False)
             self.is_playing = False
             self.is_loading = False
@@ -1108,7 +1094,7 @@ class MainFrame(wx.Frame):
     def _restore_preview_button(self):
         """恢复试听按钮"""
         # 恢复按钮标签和状态
-        self.preview_button.SetLabel("试听选中角色(&T)")
+        self.preview_button.SetLabel("试听当前角色(&T)")
         self.stop_button.Enable(False)
         self.is_playing = False
         self.is_loading = False
@@ -1189,7 +1175,7 @@ class MainFrame(wx.Frame):
                 return
             
             # 保存按钮的原始标签
-            original_label = "试听选中角色(&T)"  # 直接使用标准标签
+            original_label = "试听当前角色(&T)"  # 直接使用标准标签
             
             # 查找按钮在sizer中的位置
             index = -1
@@ -1237,7 +1223,7 @@ class MainFrame(wx.Frame):
             # 如果重新创建失败，尝试简单恢复标签
             if hasattr(self, 'preview_button'):
                 try:
-                    self.preview_button.SetLabel("试听选中角色(&T)")
+                    self.preview_button.SetLabel("试听当前角色(&T)")
                 except:
                     pass
     
@@ -1313,7 +1299,7 @@ class MainFrame(wx.Frame):
                 self.refresh_button.SetLabel("刷新语音角色(&R)")
             
             if hasattr(self, 'preview_button'):
-                self.preview_button.SetLabel("试听选中角色(&T)")
+                self.preview_button.SetLabel("试听当前角色(&T)")
             
         except Exception as e:
             print(f"重置按钮快捷键失败: {e}")
@@ -1341,13 +1327,13 @@ class MainFrame(wx.Frame):
                 self.is_loading = False
                 
             # 恢复按钮状态
-            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.preview_button.SetLabel("试听当前角色(&T)")
             self.stop_button.Enable(False)
             
         except Exception as e:
             print(f"停止播放失败: {e}")
             # 确保按钮状态恢复
-            self.preview_button.SetLabel("试听选中角色(&T)")
+            self.preview_button.SetLabel("试听当前角色(&T)")
             self.stop_button.Enable(False)
             self.is_playing = False
             self.is_loading = False
