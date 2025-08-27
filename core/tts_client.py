@@ -12,11 +12,20 @@ from urllib.parse import urljoin, urlencode
 import tempfile
 import os
 
+def safe_print(message: str) -> None:
+    """安全打印函数，处理编码问题"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # 如果编码失败，移除特殊字符后重试
+        cleaned_message = message.encode('ascii', errors='ignore').decode('ascii')
+        print(cleaned_message)
+
 try:
     from gradio_client import Client
     import gradio_client
 except ImportError:
-    print("Warning: gradio_client not installed, some features may not work")
+    safe_print("Warning: gradio_client not installed, some features may not work")
 
 class TTSClient:
     """TTS客户端"""
@@ -107,19 +116,19 @@ class TTSClient:
                         elif isinstance(choice, str) and choice.strip():
                             roles.append(choice.strip())
                 else:
-                    print(f"字典中没有找到choices键: {result.keys()}")
+                    safe_print(f"字典中没有找到choices键: {result.keys()}")
                     raise Exception("API返回的字典格式不正确")
             else:
                 # 不支持的格式
-                print(f"API返回类型: {type(result)}")
-                print(f"API返回内容: {result}")
+                safe_print(f"API返回类型: {type(result)}")
+                safe_print(f"API返回内容: {result}")
                 raise Exception(f"API返回格式错误: {type(result)}")
             
-            print(f"获取到 {len(roles)} 个角色")
+            safe_print(f"获取到 {len(roles)} 个角色")
             return roles
                 
         except Exception as e:
-            print(f"获取index TTS角色失败详情: {e}")
+            safe_print(f"获取index TTS角色失败详情: {e}")
             raise Exception(f"获取index TTS角色失败: {e}")
     
     def _get_generic_roles(self, provider: Dict[str, Any]) -> List[str]:

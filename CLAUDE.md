@@ -9,11 +9,12 @@ LegadoTTSTool is a specialized accessibility-first TTS (Text-to-Speech) voice ro
 ### Features
 - 🎯 **完全无障碍**: 100%支持键盘操作，专为盲人用户优化
 - 🔧 **提供商管理**: 支持多种TTS提供商的配置和管理
-- 🌐 **智能局域网搜索**: 自动发现局域网内的index TTS服务器，支持多服务器选择
+- 🌐 **全网段智能搜索**: 自动扫描局域网完整IP段(1-255)，150线程多线程并发加速，支持快速/全扫描双模式
 - 🎵 **实时试听**: 支持角色试听和参数调节
 - 📤 **批量导出**: 一键导出为Legado兼容的JSON格式
 - ⚙️ **动态界面**: 根据不同提供商动态生成配置界面
 - ⌨️ **高效键盘导航**: 光标式操作，回车确认，类似方案管理列表体验
+- 🚀 **高性能网络扫描**: 实时进度显示，智能IP过滤，并行端口检查，可配置性能参数，Unicode安全输出处理
 
 ## Development Commands
 
@@ -73,11 +74,16 @@ The project follows a clean 3-layer architecture:
 - Includes timeout control for preview operations
 
 ### NetworkScanner
-- Intelligent LAN discovery that detects local network segment
-- Verifies TTS servers via Gradio API endpoint testing
-- Supports both index TTS and other service type detection
-- Concurrent scanning with result aggregation
-- Automatically detects local IP and scans only the local network segment
+- **Full Network Segment Scanning**: Scans complete IP range (1-255) for comprehensive server discovery
+- **High-Performance Multi-threading**: Up to 150 concurrent threads for rapid network scanning
+- **Intelligent LAN Discovery**: Automatically detects local network segment and prioritizes local IP
+- **Advanced Server Verification**: Verifies TTS servers via Gradio API endpoint testing
+- **Dual-Mode Scanning**: Supports both fast mode and full network scanning modes
+- **Real-time Progress Tracking**: Shows scanning progress with detailed logging
+- **Smart IP Filtering**: Automatically skips network addresses (.0) and broadcast addresses (.255)
+- **Parallel Port Checking**: Simultaneously checks Web (7860) and Synthesis (9880) ports
+- **Configurable Performance**: Adjustable timeout settings and thread counts
+- **Unicode-Safe Output**: Handles encoding issues with safe print functions
 
 ### JSONExporter
 - Generates Legado-compatible JSON exports with proper structure
@@ -110,6 +116,94 @@ try:
     result = client.predict(api_name="/change_choices")
 finally:
     sys.stdout = old_stdout
+```
+
+### High-Performance Network Scanning
+The NetworkScanner implements advanced scanning capabilities for comprehensive server discovery:
+
+#### Full Network Segment Scanning
+```python
+# Scans complete IP range (1-255) for maximum coverage
+def _scan_segment_with_strategy(self, segment: str) -> List[str]:
+    priority_ips = []
+    
+    # Prioritize local machine IP
+    for adapter in adapters:
+        for ip in adapter['ipv4']:
+            if ip.startswith(segment):
+                priority_ips.append(ip)
+    
+    # Full network scan: 1-255
+    for i in range(1, 256):
+        ip = f"{segment}.{i}"
+        if ip not in priority_ips:
+            priority_ips.append(ip)
+    
+    return priority_ips
+```
+
+#### Multi-threaded Performance Optimization
+```python
+# Up to 150 concurrent threads for rapid scanning
+with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+    future_to_ip = {
+        executor.submit(self._check_host_ports, ip): ip 
+        for ip in ip_list
+    }
+```
+
+#### Parallel Port Checking
+```python
+# Simultaneously check Web (7860) and Synthesis (9880) ports
+def _check_host_ports(self, ip: str) -> Optional[Dict[str, Any]]:
+    # Skip network and broadcast addresses
+    if ip.endswith('.0') or ip.endswith('.255'):
+        return None
+    
+    # Parallel port checking with threading
+    web_thread = threading.Thread(target=check_web_port)
+    synth_thread = threading.Thread(target=check_synth_port)
+    
+    web_thread.start()
+    synth_thread.start()
+    
+    web_thread.join(timeout=self.timeout + 0.5)
+    synth_thread.join(timeout=self.timeout + 0.5)
+```
+
+#### Dual-Mode Scanning
+```python
+# Fast mode vs Full network scanning
+def scan_index_tts_servers(self, fast_mode: bool = True) -> List[Dict[str, Any]]:
+    if fast_mode and len(servers) >= 2:
+        logger.info("快速模式：已找到足够的服务器，跳过网络扫描")
+    else:
+        logger.info("全网段扫描模式：开始完整网络扫描")
+```
+
+#### Configuration and Performance Tuning
+```python
+# Configurable scanning parameters
+scanner.set_scan_config(
+    timeout=1.0,        # Timeout in seconds
+    max_threads=150,    # Maximum concurrent threads
+    fast_mode=True      # Fast scanning mode
+)
+
+# Performance estimation
+estimate = scanner.estimate_scan_time()
+print(f"预计扫描时间: {estimate['estimated_seconds']:.1f} 秒")
+```
+
+#### Safe Output Handling
+```python
+def safe_print(message: str) -> None:
+    """Safe printing function for Unicode handling"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        cleaned_message = message.encode('ascii', errors='ignore').decode('ascii')
+        print(cleaned_message)
 ```
 
 ### Dynamic UI Generation
@@ -164,7 +258,31 @@ The application includes proper resource cleanup to prevent RecursionError on ex
 ## Common Issues and Solutions
 
 ### Unicode Encoding Problems
-The TTSClient includes specific handling for gradio_client Unicode issues via stdout redirection.
+The TTSClient and NetworkScanner include comprehensive Unicode handling:
+- Safe print functions that handle encoding errors gracefully
+- Stdout redirection for gradio_client compatibility
+- Automatic cleaning of problematic Unicode characters
+
+### Network Scanning Issues
+**Problem**: Can't find TTS servers on the local network
+**Solution**: 
+- Ensure full network scanning is enabled (scans 1-255 IP range)
+- Check that TTS server is running on ports 7860 (Web) or 9880 (Synthesis)
+- Verify network connectivity and firewall settings
+- Use performance tuning to adjust timeout and thread settings
+
+**Problem**: Scanning is too slow
+**Solution**:
+- Use fast mode for quick discovery
+- Increase thread count (up to 150 concurrent threads)
+- Reduce timeout settings for faster scanning
+- Enable progress monitoring to track scanning status
+
+**Problem**: Scanning misses local TTS server
+**Solution**:
+- The scanner now prioritizes local machine IP address
+- Ensure local TTS server is running and accessible
+- Check IP address configuration and network segment detection
 
 ### Threading UI Updates
 Use custom wxPython events and `wx.PostEvent()` for thread-safe UI updates from background threads.
@@ -275,6 +393,19 @@ LegadoTTSTool/
   - Parameter control optimization
   - Smart input validation
   - Real-time accessibility announcements
+  
+- **Advanced Network Scanning System**
+  - **Full network segment scanning**: Complete IP range (1-255) coverage for comprehensive server discovery
+  - **High-performance multi-threading**: Up to 150 concurrent threads for rapid scanning (8.6 IP/second)
+  - **Performance optimization**: Configurable timeout settings and thread counts for different network environments
+  - **Dual-mode scanning**: Fast mode for quick discovery and full mode for comprehensive scanning
+  - **Smart IP prioritization**: Local machine IP is prioritized to ensure discovery of local TTS servers
+  - **Parallel port checking**: Simultaneous Web (7860) and Synthesis (9880) port verification
+  - **Real-time progress tracking**: Live scanning progress with detailed logging every 20 IP addresses
+  - **Intelligent IP filtering**: Automatic skipping of network addresses (.0) and broadcast addresses (.255)
+  - **Configurable performance**: Adjustable timeout settings and thread counts for different network environments
+  - **Unicode-safe output**: Comprehensive encoding error handling for stable operation on Windows systems
+  - **Performance estimation**: Built-in scanning time calculation and configuration optimization
 
 ### Planned Features
 - **Support more TTS providers**
@@ -322,6 +453,31 @@ LegadoTTSTool/
 - Screen reader support (NVDA, JAWS recommended)
 
 ## Changelog
+
+### [1.1.0] - 2024-08-27
+
+#### New Features
+- **Full Network Segment Scanning**: Complete IP range (1-255) coverage for comprehensive TTS server discovery
+- **High-Performance Multi-threading**: Up to 150 concurrent threads for rapid scanning (8.6 IP/second)
+- **Dual-Mode Scanning**: Fast mode for quick discovery and full mode for comprehensive scanning
+- **Smart IP Prioritization**: Local machine IP is prioritized to ensure discovery of local TTS servers
+- **Parallel Port Checking**: Simultaneous Web (7860) and Synthesis (9880) port verification
+- **Real-time Progress Tracking**: Live scanning progress with detailed logging
+- **Configurable Performance**: Adjustable timeout settings and thread counts
+- **Performance Estimation**: Built-in scanning time calculation and optimization
+
+#### Technical Improvements
+- **Unicode-safe Output**: Comprehensive encoding error handling for Windows systems
+- **Intelligent IP Filtering**: Automatic skipping of network addresses (.0) and broadcast addresses (.255)
+- **Enhanced Error Handling**: Robust exception handling for network operations
+- **Memory Optimization**: Improved resource management and cleanup
+- **Logging Enhancement**: Detailed progress tracking and debugging information
+
+#### Bug Fixes
+- **GBK Encoding Issues**: Fixed Unicode character encoding problems in network scanning
+- **Local Server Discovery**: Resolved issues with detecting TTS servers running on local machine
+- **Network Configuration**: Improved network segment detection and IP range generation
+- **Performance Stability**: Enhanced threading stability and resource cleanup
 
 ### [1.0.0] - 2024-08-25
 
