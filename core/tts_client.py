@@ -56,7 +56,7 @@ class TTSClient:
         try:
             provider_type = provider.get('type')
             
-            if provider_type == 'index_tts':
+            if provider_type == 'index-tts':
                 return self._get_index_tts_roles(provider)
             elif provider_type == 'generic':
                 return self._get_generic_roles(provider)
@@ -67,7 +67,7 @@ class TTSClient:
             raise Exception(f"获取角色列表失败: {e}")
     
     def _get_index_tts_roles(self, provider: Dict[str, Any]) -> List[str]:
-        """获取index TTS角色列表"""
+        """获取index-tts角色列表"""
         try:
             server_address = provider.get('server_address')
             web_port = provider.get('web_port', 7860)
@@ -128,8 +128,8 @@ class TTSClient:
             return roles
                 
         except Exception as e:
-            safe_print(f"获取index TTS角色失败详情: {e}")
-            raise Exception(f"获取index TTS角色失败: {e}")
+            safe_print(f"获取index-tts角色失败详情: {e}")
+            raise Exception(f"获取index-tts角色失败: {e}")
     
     def _get_generic_roles(self, provider: Dict[str, Any]) -> List[str]:
         """获取通用角色列表"""
@@ -180,7 +180,7 @@ class TTSClient:
         try:
             provider_type = provider.get('type')
             
-            if provider_type == 'index_tts':
+            if provider_type == 'index-tts':
                 return self._preview_index_tts_speech(provider, role, text, speed, volume)
             elif provider_type == 'generic':
                 return self._preview_generic_speech(provider, role, text, speed, volume)
@@ -191,7 +191,7 @@ class TTSClient:
             raise Exception(f"语音合成失败: {e}")
     
     def _preview_index_tts_speech(self, provider: Dict[str, Any], role: str, text: str, speed: float, volume: float) -> bytes:
-        """预览index TTS语音"""
+        """预览index-tts语音"""
         try:
             server_address = provider.get('server_address')
             synth_port = provider.get('synth_port')
@@ -229,7 +229,7 @@ class TTSClient:
                 raise Exception(f"语音合成失败: {response.status_code}")
                 
         except Exception as e:
-            raise Exception(f"index TTS语音合成失败: {e}")
+            raise Exception(f"index-tts语音合成失败: {e}")
     
     def _preview_generic_speech(self, provider: Dict[str, Any], role: str, text: str, speed: float, volume: float) -> bytes:
         """预览通用语音"""
@@ -283,7 +283,7 @@ class TTSClient:
             provider_type = provider.get('type')
             start_time = time.time()
             
-            if provider_type == 'index_tts':
+            if provider_type == 'index-tts':
                 result = self._test_index_tts_connection(provider)
             elif provider_type == 'generic':
                 result = self._test_generic_connection(provider)
@@ -304,7 +304,7 @@ class TTSClient:
             }
     
     def _test_index_tts_connection(self, provider: Dict[str, Any]) -> Dict[str, Any]:
-        """测试index TTS连接"""
+        """测试index-tts连接"""
         try:
             server_address = provider.get('server_address')
             web_port = provider.get('web_port', 7860)
@@ -419,7 +419,7 @@ class TTSClient:
         try:
             provider_type = provider.get('type')
             
-            if provider_type == 'index_tts':
+            if provider_type == 'index-tts':
                 return self._get_index_tts_info(provider)
             elif provider_type == 'generic':
                 return self._get_generic_info(provider)
@@ -438,14 +438,14 @@ class TTSClient:
             }
     
     def _get_index_tts_info(self, provider: Dict[str, Any]) -> Dict[str, Any]:
-        """获取index TTS信息"""
+        """获取index-tts信息"""
         try:
             server_address = provider.get('server_address')
             web_port = provider.get('web_port', 7860)
             
             if not server_address:
                 return {
-                    'type': 'index_tts',
+                    'type': 'index-tts',
                     'supported': True,
                     'configured': False,
                     'error': '服务器地址未配置'

@@ -60,7 +60,7 @@
 ## 📋 支持的TTS服务
 
 ### 当前支持
-- [x] **index TTS**: 完整支持，包括局域网搜索
+- [x] **index-tts**: 完整支持，包括局域网搜索
 
 ### 计划支持
 - [ ] Microsoft Azure TTS
@@ -134,7 +134,7 @@ LegadoTTSTool/
 - [x] 核心架构设计
 - [x] 用户界面实现
 - [x] 无障碍功能
-- [x] index TTS支持
+- [x] index-tts支持
 - [x] 网络扫描功能
 - [x] 键盘导航优化
 - [x] 稳定性修复

@@ -243,7 +243,7 @@ class ProviderManager:
         
         # 根据类型验证配置
         provider_type = provider_data.get('type')
-        if provider_type == 'index_tts':
+        if provider_type == 'index-tts':
             errors.extend(self._validate_index_tts_config(provider_data))
         elif provider_type == 'generic':
             errors.extend(self._validate_generic_config(provider_data))
@@ -251,7 +251,7 @@ class ProviderManager:
         return errors
     
     def _validate_index_tts_config(self, provider_data: Dict[str, Any]) -> List[str]:
-        """验证index TTS配置"""
+        """验证index-tts配置"""
         errors = []
         
         # 验证服务器地址

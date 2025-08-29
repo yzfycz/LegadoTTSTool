@@ -73,7 +73,7 @@ class NetworkScanner:
         self.timeout = 1.0  # 减少超时时间，提高扫描速度
         self.max_threads = 150  # 增加线程数，加速扫描
         
-        # index TTS 端口
+        # index-tts 端口
         self.index_tts_ports = {
             'web': 7860,
             'synth': 9880
@@ -85,10 +85,10 @@ class NetworkScanner:
         logger.debug("网络扫描器初始化完成（稳定性优化模式）")
     
     def scan_index_tts_servers(self, fast_mode: bool = True) -> List[Dict[str, Any]]:
-        """扫描index TTS服务器 - 支持快速和全网段扫描模式"""
+        """扫描index-tts服务器 - 支持快速和全网段扫描模式"""
         try:
             mode_text = "快速扫描" if fast_mode else "全网段扫描"
-            logger.info(f"开始{mode_text}index TTS服务器")
+            logger.info(f"开始{mode_text}index-tts服务器")
             
             servers = []
             
@@ -520,7 +520,7 @@ class NetworkScanner:
         return verified_servers
     
     def _verify_index_tts_server(self, host: Dict[str, Any]) -> bool:
-        """验证index TTS服务器"""
+        """验证index-tts服务器"""
         try:
             # 优先验证Web端口
             if host.get('web_port'):
@@ -705,12 +705,12 @@ class NetworkScanner:
         port_info = {
             7860: {
                 'name': 'Gradio Web Interface',
-                'description': 'index TTS Web界面端口',
+                'description': 'index-tts Web界面端口',
                 'protocol': 'HTTP'
             },
             9880: {
                 'name': 'Synthesis Interface',
-                'description': 'index TTS合成接口端口',
+                'description': 'index-tts合成接口端口',
                 'protocol': 'HTTP'
             }
         }

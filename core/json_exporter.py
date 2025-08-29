@@ -100,7 +100,7 @@ class JSONExporter:
         try:
             provider_type = provider.get('type')
             
-            if provider_type == 'index_tts':
+            if provider_type == 'index-tts':
                 return self._build_index_tts_url(role, provider, speed, volume)
             elif provider_type == 'generic':
                 return self._build_generic_url(role, provider, speed, volume)
@@ -111,7 +111,7 @@ class JSONExporter:
             raise Exception(f"构建URL失败: {e}")
     
     def _build_index_tts_url(self, role: str, provider: Dict[str, Any], speed: float, volume: float) -> str:
-        """构建index TTS URL"""
+        """构建index-tts URL"""
         try:
             server_address = provider.get('server_address')
             synth_port = provider.get('synth_port')
@@ -136,7 +136,7 @@ class JSONExporter:
             return url
             
         except Exception as e:
-            raise Exception(f"构建index TTS URL失败: {e}")
+            raise Exception(f"构建index-tts URL失败: {e}")
     
     def _build_generic_url(self, role: str, provider: Dict[str, Any], speed: float, volume: float) -> str:
         """构建通用URL"""

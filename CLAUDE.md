@@ -66,7 +66,7 @@ The project follows a clean 3-layer architecture:
 - Handles provider state (enabled/disabled) and usage tracking
 
 ### TTSClient
-- Handles complex Gradio API interactions for index TTS services
+- Handles complex Gradio API interactions for index-tts services
 - Implements Unicode encoding fixes via stdout redirection
 - Supports voice role retrieval and real-time text-to-speech synthesis
 - Comprehensive error handling for network and API failures
@@ -237,7 +237,7 @@ Configuration interfaces adapt based on provider type:
 ```
 
 ### Auto-Creation
-The application automatically creates `config/providers.json` on first run with a default index TTS provider configuration.
+The application automatically creates `config/providers.json` on first run with a default index-tts provider configuration.
 
 ## Error Handling Patterns
 
@@ -390,7 +390,7 @@ LegadoTTSTool/
   - Screen reader support
   - High contrast mode
   
-- **index TTS Support**
+- **index-tts Support**
   - Role list retrieval
   - Voice preview
   - LAN search
@@ -442,7 +442,7 @@ LegadoTTSTool/
 
 ## Supported TTS Providers
 
-### index TTS
+### index-tts
 - Automatic LAN discovery
 - Role list retrieval support
 - Real-time voice preview
