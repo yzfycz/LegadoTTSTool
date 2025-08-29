@@ -15,6 +15,7 @@ LegadoTTSTool is a specialized accessibility-first TTS (Text-to-Speech) voice ro
 - ⚙️ **动态界面**: 根据不同提供商动态生成配置界面
 - ⌨️ **完整键盘快捷键系统**: 所有控件都有唯一的Alt+key快捷键，无冲突设计
 - 🚀 **高性能网络扫描**: 实时进度显示，智能IP过滤，并行端口检查，可配置性能参数，Unicode安全输出处理
+- 🔊 **智能音效系统**: 上下文音效反馈，试听和搜索时播放提示音效，自动停止机制
 
 ## Development Commands
 
@@ -84,6 +85,15 @@ The project follows a clean 3-layer architecture:
 - **Parallel Port Checking**: Simultaneously checks Web (7860) and Synthesis (9880) ports
 - **Configurable Performance**: Adjustable timeout settings and thread counts
 - **Unicode-Safe Output**: Handles encoding issues with safe print functions
+
+### SoundManager
+- **Contextual Audio Feedback**: Plays appropriate sound effects for preview and search operations
+- **Multi-threaded Audio Playback**: Background sound effects with proper resource management
+- **Intelligent Sound Control**: Automatically stops sound effects when TTS audio is received or operations complete
+- **File Path Management**: Automatic sound file discovery for both development and packaged environments
+- **Event-Driven Architecture**: Uses custom SoundStopEvent for thread-safe audio control
+- **Graceful Degradation**: Silently handles missing sound files without affecting core functionality
+- **Resource Management**: Proper pygame.mixer initialization, cleanup, and state management
 
 ### JSONExporter
 - Generates Legado-compatible JSON exports with proper structure
@@ -359,6 +369,7 @@ LegadoTTSTool/
 │   └── json_exporter.py    # JSON exporter
 ├── utils/                  # Utility modules
 │   ├── accessibility.py    # Accessibility utilities
+│   ├── sound_manager.py    # Sound effect management
 │   └── file_utils.py       # File operation utilities
 ├── requirements.txt        # Python dependencies
 ├── .gitignore             # Git ignore file
@@ -384,6 +395,7 @@ LegadoTTSTool/
   - Network scanner
   - TTS client
   - JSON exporter
+  - Sound effect system
   
 - **Accessibility Support**
   - Keyboard navigation
@@ -422,6 +434,15 @@ LegadoTTSTool/
   - **Configurable performance**: Adjustable timeout settings and thread counts for different network environments
   - **Unicode-safe output**: Comprehensive encoding error handling for stable operation on Windows systems
   - **Performance estimation**: Built-in scanning time calculation and configuration optimization
+  
+- **Sound Effect System**
+  - **Contextual audio feedback**: Different sound effects for preview and search operations
+  - **Intelligent sound control**: Automatic stopping when TTS audio is received or operations complete
+  - **Thread-safe architecture**: Event-driven sound management with proper resource cleanup
+  - **Graceful error handling**: Silent failure when sound files are missing
+  - **Cross-platform compatibility**: Works in both development and packaged environments
+  - **Smart preview logic**: Sound effects only play after valid role selection
+  - **Enhanced stop functionality**: Stop button controls both TTS audio and sound effects
 
 ### Planned Features
 - **Support more TTS providers**
@@ -460,7 +481,7 @@ LegadoTTSTool/
 - `wxPython==4.2.1`: GUI framework with accessibility support
 - `requests==2.31.0`: HTTP client for API calls
 - `gradio_client==0.8.1`: Gradio API client for TTS services
-- `pygame==2.5.2`: Audio playback for voice preview
+- `pygame==2.5.2`: Audio playback for voice preview and sound effects
 - `uuid==1.30`: UUID generation for provider IDs
 
 ### Platform Requirements
@@ -488,6 +509,32 @@ LegadoTTSTool/
 - **Cleaner Refresh Process**: Removed temporary placeholder items during role list refresh
 - **Better State Management**: Improved separation between navigation focus and selection state
 - **Simplified Event Handling**: Removed preview triggers from double-click and Enter key events
+
+### [1.1.3] - 2024-08-29
+
+#### New Features
+- **Sound Effect System**: Implemented comprehensive audio feedback system with contextual sound effects
+- **Preview Sound Effects**: "ZhengZaiHeCheng.wav" → looping "DuMiao.wav" during voice preview
+- **Search Sound Effects**: "ZhengZaiSouSuo.wav" → looping "DuMiao.wav" during LAN search
+- **Smart Sound Control**: Sounds only play when appropriate (no sounds during role refresh)
+
+#### Sound System Architecture
+- **SoundManager Class**: Dedicated audio management with pygame.mixer integration
+- **Event-Driven Architecture**: Custom SoundStopEvent for thread-safe audio control
+- **Multi-threaded Audio**: Background sound playback with proper resource management
+- **File Path Management**: Automatic sound file discovery for both development and packaged environments
+
+#### Technical Implementation
+- **Audio Resource Management**: Proper pygame.mixer initialization and cleanup
+- **Thread Safety**: Custom wxPython events for cross-thread communication
+- **Graceful Error Handling**: Silent failure when sound files are missing
+- **Memory Optimization**: Efficient temporary file cleanup with retry mechanisms
+
+#### Bug Fixes
+- **Stop Button Enhancement**: Stop button now properly stops both TTS audio and looping sound effects
+- **Preview Logic Fix**: Sound effects only play after valid role selection, preventing unnecessary audio playback
+- **File Locking Resolution**: Improved temporary file deletion with proper pygame.mixer resource release
+- **Audio System Stability**: Enhanced mixer state management to prevent conflicts between sound effects and TTS audio
 
 ### [1.1.1] - 2024-08-27
 

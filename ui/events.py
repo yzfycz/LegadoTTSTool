@@ -12,3 +12,4 @@ import wx.lib.newevent
 RoleUpdateEvent, EVT_ROLE_UPDATE = wx.lib.newevent.NewEvent()
 ScanCompleteEvent, EVT_SCAN_COMPLETE = wx.lib.newevent.NewEvent()
 ProviderUpdateEvent, EVT_PROVIDER_UPDATE = wx.lib.newevent.NewEvent()
+SoundStopEvent, EVT_SOUND_STOP = wx.lib.newevent.NewEvent()

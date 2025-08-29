@@ -12,6 +12,8 @@ import time
 from typing import List, Dict, Any, Optional
 
 from core.network_scanner import NetworkScanner
+from ui.events import SoundStopEvent, EVT_SOUND_STOP
+from utils.sound_manager import SoundManager
 
 class ConfigDialog(wx.Dialog):
     """方案配置对话框"""
@@ -34,6 +36,12 @@ class ConfigDialog(wx.Dialog):
         
         # 支持的方案类型
         self.provider_types = ["index-tts"]
+        
+        # 初始化音效管理器
+        self.sound_manager = SoundManager()
+        
+        # 绑定音效停止事件
+        self.Bind(EVT_SOUND_STOP, self.on_sound_stop)
         
         # 初始化界面
         self._init_ui()
@@ -319,6 +327,9 @@ class ConfigDialog(wx.Dialog):
             button.Enable(False)
             button.SetLabel("正在搜索...")
             
+            # 开始播放搜索音效
+            self.sound_manager.start_sound_effect("search")
+            
             # 在后台线程中搜索
             import threading
             threading.Thread(
@@ -339,10 +350,15 @@ class ConfigDialog(wx.Dialog):
             # 仅扫描服务器，不涉及UI操作
             scan_result = scanner.scan_and_select_server()
             
+            # 停止搜索音效
+            wx.PostEvent(self, SoundStopEvent(action_type="search"))
+            
             # 在主线程中处理结果和UI操作
             wx.CallAfter(self._handle_scan_result, scan_result, button)
             
         except Exception as e:
+            # 停止搜索音效
+            wx.PostEvent(self, SoundStopEvent(action_type="search"))
             wx.CallAfter(wx.MessageBox, f"搜索失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
     
     def _handle_scan_result(self, scan_result, button):
@@ -512,6 +528,10 @@ class ConfigDialog(wx.Dialog):
         """恢复搜索按钮"""
         button.Enable(True)
         button.SetLabel("搜索局域网")
+    
+    def on_sound_stop(self, event):
+        """音效停止事件处理"""
+        self.sound_manager.stop_sound_effect()
     
     def on_save(self, event):
         """保存配置"""

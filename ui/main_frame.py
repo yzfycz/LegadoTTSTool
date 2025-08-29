@@ -21,7 +21,8 @@ from core.network_scanner import NetworkScanner
 from utils.file_utils import FileUtils
 from utils.accessibility import AccessibilityUtils
 from utils.accessible_role_list import AccessibleRoleList
-from ui.events import RoleUpdateEvent, EVT_ROLE_UPDATE, ScanCompleteEvent, EVT_SCAN_COMPLETE, ProviderUpdateEvent, EVT_PROVIDER_UPDATE
+from utils.sound_manager import SoundManager
+from ui.events import RoleUpdateEvent, EVT_ROLE_UPDATE, ScanCompleteEvent, EVT_SCAN_COMPLETE, ProviderUpdateEvent, EVT_PROVIDER_UPDATE, SoundStopEvent, EVT_SOUND_STOP
 
 
 class MainFrame(wx.Frame):
@@ -37,6 +38,7 @@ class MainFrame(wx.Frame):
         self.json_exporter = JSONExporter()
         self.network_scanner = NetworkScanner()
         self.accessibility = AccessibilityUtils()
+        self.sound_manager = SoundManager()
         
         # 当前选中的角色列表
         self.current_roles = []
@@ -55,6 +57,7 @@ class MainFrame(wx.Frame):
         self.Bind(EVT_ROLE_UPDATE, self.on_role_update)
         self.Bind(EVT_SCAN_COMPLETE, self.on_scan_complete)
         self.Bind(EVT_PROVIDER_UPDATE, self.on_provider_update)
+        self.Bind(EVT_SOUND_STOP, self.on_sound_stop)
         
         # 初始化日志系统
         from utils.logger import get_logger
@@ -390,6 +393,10 @@ class MainFrame(wx.Frame):
     
     def on_refresh_roles(self, event):
         """刷新角色列表"""
+        self._refresh_roles(play_sound=False)
+    
+    def _refresh_roles(self, play_sound=False):
+        """刷新角色列表的内部方法"""
         try:
             # 获取当前选择的方案
             provider_name = self.provider_combo.GetValue()
@@ -402,6 +409,10 @@ class MainFrame(wx.Frame):
             if not provider:
                 wx.MessageBox("未找到方案配置", "错误", wx.OK | wx.ICON_ERROR)
                 return
+            
+            # 根据参数决定是否播放音效
+            if play_sound:
+                self.sound_manager.start_sound_effect("search")
             
             # 清空当前角色列表
             self.role_list.Clear()
@@ -424,6 +435,7 @@ class MainFrame(wx.Frame):
             # 恢复按钮标签
             self.refresh_button.SetLabel("刷新语音角色(&R)")
     
+        
     def _refresh_roles_thread(self, provider):
         """在后台线程中刷新角色列表"""
         try:
@@ -983,6 +995,9 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("请先选择一个角色", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
             
+            # 确认有角色选择后才开始播放试听音效
+            self.sound_manager.start_sound_effect("preview")
+            
             role = self.current_roles[index]
             
             # 获取当前方案配置
@@ -1037,6 +1052,9 @@ class MainFrame(wx.Frame):
             if not self.is_loading or not audio_data:
                 return
             
+            # 停止试听音效
+            wx.PostEvent(self, SoundStopEvent(action_type="preview"))
+            
             # 开始播放
             self.is_loading = False
             self.is_playing = True
@@ -1046,6 +1064,8 @@ class MainFrame(wx.Frame):
             
         except Exception as e:
             if self.is_loading:  # 只有没有取消时才显示错误
+                # 停止试听音效
+                wx.PostEvent(self, SoundStopEvent(action_type="preview"))
                 wx.CallAfter(wx.MessageBox, f"试听失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
         finally:
             # 简单恢复按钮状态，不调用复杂的恢复函数
@@ -1053,6 +1073,7 @@ class MainFrame(wx.Frame):
     
     def _play_audio(self, audio_data):
         """播放音频"""
+        temp_path = None
         try:
             import tempfile
             import pygame
@@ -1062,8 +1083,14 @@ class MainFrame(wx.Frame):
                 temp_file.write(audio_data)
                 temp_path = temp_file.name
             
-            # 初始化pygame音频
-            pygame.mixer.init()
+            # 确保pygame mixer已初始化（SoundManager应该已经初始化了）
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            
+            # 确保之前的音乐已完全停止
+            pygame.mixer.music.stop()
+            pygame.time.Clock().tick(1)  # 短暂等待
+            
             pygame.mixer.music.load(temp_path)
             pygame.mixer.music.play()
             
@@ -1071,14 +1098,72 @@ class MainFrame(wx.Frame):
             while pygame.mixer.music.get_busy() and self.is_playing:
                 pygame.time.Clock().tick(10)
             
-            # 清理资源
-            pygame.mixer.quit()
-            os.unlink(temp_path)
+            # 音频播放完成
             
         except Exception as e:
             print(f"音频播放失败: {e}")
         finally:
             self.is_playing = False
+            
+            # 确保pygame.mixer完全释放音频文件
+            try:
+                import pygame
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+                    pygame.mixer.quit()
+                    print("已停止pygame.mixer并释放音频资源")
+                    
+                    # 重新初始化pygame.mixer以支持音效功能
+                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+                    pygame.mixer.music.set_volume(1.0)
+                    print("已重新初始化pygame.mixer")
+            except Exception as e:
+                print(f"释放pygame.mixer资源失败: {e}")
+            
+            # 延迟删除临时文件，避免文件锁定问题
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    import threading
+                    def delete_file_later():
+                        import time
+                        import atexit
+                        
+                        # 注册退出时删除，确保程序结束时清理
+                        def cleanup_on_exit():
+                            try:
+                                if os.path.exists(temp_path):
+                                    os.unlink(temp_path)
+                                    print(f"程序退出时删除临时文件: {temp_path}")
+                            except:
+                                pass
+                        
+                        atexit.register(cleanup_on_exit)
+                        
+                        # 两次尝试删除，使用适当的等待时间
+                        for attempt in range(2):
+                            try:
+                                # 等待时间：第一次1秒，第二次10秒
+                                wait_time = 1 if attempt == 0 else 10
+                                time.sleep(wait_time)
+                                
+                                if not os.path.exists(temp_path):
+                                    print(f"临时文件已被其他进程删除: {temp_path}")
+                                    break
+                                
+                                # 直接删除
+                                os.unlink(temp_path)
+                                print(f"临时文件已删除（第{attempt + 1}次尝试）: {temp_path}")
+                                break
+                                
+                            except Exception as e:
+                                if attempt == 1:  # 最后一次尝试
+                                    print(f"删除临时文件失败（已重试2次）: {e}")
+                                else:
+                                    print(f"删除临时文件失败，第{attempt + 1}次重试（等待{wait_time}秒）: {e}")
+                    
+                    threading.Thread(target=delete_file_later, daemon=True).start()
+                except Exception as e:
+                    print(f"启动文件删除线程失败: {e}")
     
     def _simple_restore_preview_button(self):
         """简单恢复试听按钮状态（不涉及复杂的焦点管理）"""
@@ -1304,20 +1389,15 @@ class MainFrame(wx.Frame):
         except Exception as e:
             print(f"重置按钮快捷键失败: {e}")
     
-    def on_preview_button(self, event):
-        """试听按钮事件"""
-        self._preview_selected_role()
-    
     def on_stop_button(self, event):
         """停止按钮事件"""
         try:
             if self.is_playing:
-                # 停止pygame播放
+                # 停止pygame播放，但不关闭mixer（音效管理器需要使用）
                 try:
                     import pygame
                     if pygame.mixer.get_init():
                         pygame.mixer.music.stop()
-                        pygame.mixer.quit()
                 except:
                     pass
                 self.is_playing = False
@@ -1325,6 +1405,10 @@ class MainFrame(wx.Frame):
             if self.is_loading:
                 # 取消正在进行的请求
                 self.is_loading = False
+                
+            # 停止音效管理器的循环音效
+            if hasattr(self, 'sound_manager'):
+                self.sound_manager.stop_sound_effect()
                 
             # 恢复按钮状态
             self.preview_button.SetLabel("试听当前角色(&T)")
@@ -1337,6 +1421,10 @@ class MainFrame(wx.Frame):
             self.stop_button.Enable(False)
             self.is_playing = False
             self.is_loading = False
+    
+    def on_sound_stop(self, event):
+        """音效停止事件处理"""
+        self.sound_manager.stop_sound_effect()
     
     def _update_button_states(self):
         """更新按钮状态"""
