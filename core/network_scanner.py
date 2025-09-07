@@ -85,9 +85,9 @@ class NetworkScanner:
         logger.debug("网络扫描器初始化完成（稳定性优化模式）")
     
     def scan_index_tts_servers(self, fast_mode: bool = True) -> List[Dict[str, Any]]:
-        """扫描index-tts服务器 - 支持快速和全网段扫描模式"""
+        """扫描index-tts服务器 - 支持智能网段过滤和快速扫描模式"""
         try:
-            mode_text = "快速扫描" if fast_mode else "全网段扫描"
+            mode_text = "智能扫描" if fast_mode else "全网段扫描"
             logger.info(f"开始{mode_text}index-tts服务器")
             
             servers = []
@@ -103,11 +103,11 @@ class NetworkScanner:
                 logger.info("快速模式：已找到足够的服务器，跳过网络扫描")
             else:
                 if fast_mode:
-                    logger.info("快速模式：服务器不足，开始网络扫描")
+                    logger.info("快速模式：服务器不足，开始智能网络扫描")
                 else:
                     logger.info("全网段扫描模式：开始完整网络扫描")
                 
-                # 获取要扫描的IP列表
+                # 获取要扫描的IP列表（使用智能过滤）
                 ip_list = self._get_scan_ips()
                 
                 if not ip_list:
@@ -205,7 +205,7 @@ class NetworkScanner:
     def scan_and_select_server(self) -> Optional[Dict[str, Any]]:
         """扫描并让用户选择服务器"""
         try:
-            # 扫描服务器
+            # 扫描服务器（使用智能过滤）
             servers = self.scan_index_tts_servers()
             
             if not servers:
@@ -230,6 +230,63 @@ class NetworkScanner:
         except Exception as e:
             safe_print(f"扫描服务器失败: {e}")
             return []
+    
+    def get_scan_info(self) -> Dict[str, Any]:
+        """获取智能扫描信息"""
+        try:
+            # 获取智能过滤的网段信息
+            filtered_data = self.network_info.get_filtered_network_segments()
+            
+            # 获取当前扫描配置
+            scan_config = self.get_scan_config()
+            
+            # 组合扫描信息
+            scan_info = {
+                'scan_strategy': filtered_data,
+                'scan_config': scan_config,
+                'estimated_performance': filtered_data['performance_estimate'],
+                'network_adapters': self.network_info.get_network_adapters()
+            }
+            
+            return scan_info
+            
+        except Exception as e:
+            safe_print(f"获取扫描信息失败: {e}")
+            return {}
+    
+    def estimate_scan_time(self, ip_count: int = None) -> Dict[str, float]:
+        """估算扫描时间 - 基于智能过滤"""
+        try:
+            if ip_count is None:
+                # 使用智能过滤的性能预估
+                filtered_data = self.network_info.get_filtered_network_segments()
+                ip_count = filtered_data['performance_estimate']['total_ips']
+            
+            # 基于当前配置估算时间
+            time_per_ip = self.timeout * 0.8  # 考虑并行优化
+            total_time = ip_count * time_per_ip
+            
+            # 考虑线程池并发
+            concurrent_factor = min(self.max_threads, ip_count)
+            estimated_time = total_time / concurrent_factor
+            
+            return {
+                'estimated_seconds': estimated_time,
+                'estimated_minutes': estimated_time / 60,
+                'ip_count': ip_count,
+                'threads': self.max_threads,
+                'timeout': self.timeout
+            }
+            
+        except Exception as e:
+            safe_print(f"估算扫描时间失败: {e}")
+            return {
+                'estimated_seconds': 0,
+                'estimated_minutes': 0,
+                'ip_count': 0,
+                'threads': self.max_threads,
+                'timeout': self.timeout
+            }
     
     def _let_user_choose_server(self, servers: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """让用户选择服务器"""
@@ -334,48 +391,62 @@ class NetworkScanner:
             return False
     
     def _get_scan_ips(self) -> List[str]:
-        """获取要扫描的IP列表 - 使用智能网段检测和快速扫描策略"""
+        """获取要扫描的IP列表 - 使用智能网段过滤策略"""
         ip_list = []
         
         try:
-            # 获取主要网段
-            primary_segment = self.network_info.get_primary_network_segment()
+            # 使用智能网段过滤获取扫描策略
+            filtered_data = self.network_info.get_filtered_network_segments()
+            segments_to_scan = filtered_data['segments_to_scan']
             
-            if primary_segment:
-                # 扫描主要网段
-                primary_ips = self._scan_segment_with_strategy(primary_segment)
-                ip_list.extend(primary_ips)
-                logger.info(f"主要网段扫描: {primary_segment} (共{len(primary_ips)}个IP)")
-                
-                # 尝试获取其他网段，增加扫描完整性
-                try:
-                    all_segments = self.network_info.get_network_segments()
-                    other_segments = [s for s in all_segments if s != primary_segment]
-                    
-                    # 如果有其他网段，选择性扫描一些重要IP
-                    if other_segments:
-                        logger.info(f"发现其他网段: {other_segments}，将进行补充扫描")
-                        
-                        # 对其他网段只扫描关键IP（1-10, 200-210）
-                        for segment in other_segments[:2]:  # 最多扫描2个额外网段
-                            critical_ips = []
-                            for i in range(1, 11):  # 1-10
-                                critical_ips.append(f"{segment}.{i}")
-                            for i in range(200, 211):  # 200-210
-                                critical_ips.append(f"{segment}.{i}")
-                            
-                            ip_list.extend(critical_ips)
-                            logger.info(f"补充扫描网段: {segment} (共{len(critical_ips)}个关键IP)")
-                except Exception as e:
-                    logger.debug(f"获取其他网段失败: {e}")
-                
-            else:
-                # 如果获取网段失败，使用默认IP
+            if not segments_to_scan:
+                logger.warning("没有可扫描的网段，使用默认IP列表")
                 ip_list.extend(self._get_default_ips())
-                logger.warning("无法获取网段，使用默认IP列表")
+                return ip_list
+            
+            logger.info(f"开始智能扫描，共 {len(segments_to_scan)} 个网段需要扫描")
+            
+            # 按扫描策略生成IP列表
+            for segment_info in segments_to_scan:
+                segment = segment_info['segment']
+                scan_mode = segment_info['mode']
+                scan_range = segment_info['scan_range']
+                reason = segment_info['reason']
                 
+                logger.info(f"扫描网段: {segment} ({scan_mode}模式) - {reason}")
+                
+                if scan_mode == 'FULL':
+                    # 完整扫描：1-255
+                    segment_ips = self._scan_segment_with_strategy(segment)
+                    ip_list.extend(segment_ips)
+                    logger.info(f"  完整扫描: {segment} (共{len(segment_ips)}个IP)")
+                    
+                elif scan_mode == 'FAST':
+                    # 快速扫描：关键IP范围
+                    fast_ips = []
+                    if isinstance(scan_range, list):
+                        # 多个范围
+                        for range_start, range_end in scan_range:
+                            for i in range(range_start, range_end + 1):
+                                fast_ips.append(f"{segment}.{i}")
+                    else:
+                        # 单个范围
+                        range_start, range_end = scan_range
+                        for i in range(range_start, range_end + 1):
+                            fast_ips.append(f"{segment}.{i}")
+                    
+                    ip_list.extend(fast_ips)
+                    logger.info(f"  快速扫描: {segment} (共{len(fast_ips)}个IP)")
+            
+            # 记录性能预估
+            performance = filtered_data['performance_estimate']
+            logger.info(f"智能扫描策略生成完成:")
+            logger.info(f"  总IP数量: {performance['total_ips']}")
+            logger.info(f"  预估扫描时间: {performance['scan_time']:.1f}秒")
+            logger.info(f"  节省时间: {performance['time_saved'] * 0.1:.1f}秒")
+            
         except Exception as e:
-            logger.error(f"获取扫描IP列表失败: {e}")
+            logger.error(f"获取智能扫描IP列表失败: {e}")
             ip_list.extend(self._get_default_ips())
         
         logger.debug(f"生成IP列表: {len(ip_list)} 个地址")

@@ -365,26 +365,9 @@ class ConfigDialog(wx.Dialog):
         """在主线程中处理扫描结果"""
         try:
             if scan_result is None:
-                # 没有找到服务器
+                # 没有找到服务器，只显示提示，不自动填写地址
                 wx.MessageBox("未在局域网找到index-tts服务器", "提示", wx.OK | wx.ICON_INFORMATION)
                 
-                # 使用默认地址
-                from utils.network_info import get_primary_network_segment
-                primary_segment = get_primary_network_segment()
-                
-                if primary_segment:
-                    server_data = {
-                        'address': f"{primary_segment}.100",
-                        'web_port': 7860,
-                        'synth_port': 9880
-                    }
-                else:
-                    server_data = {
-                        'address': '127.0.0.1',
-                        'web_port': 7860,
-                        'synth_port': 9880
-                    }
-                    
             elif isinstance(scan_result, dict):
                 # 只有一个服务器，直接使用
                 server_data = {
@@ -403,28 +386,19 @@ class ConfigDialog(wx.Dialog):
                         'synth_port': selected_server.get('synth_port', 9880)
                     }
                 else:
-                    # 用户取消了选择，使用默认地址
-                    from utils.network_info import get_primary_network_segment
-                    primary_segment = get_primary_network_segment()
-                    
-                    if primary_segment:
-                        server_data = {
-                            'address': f"{primary_segment}.100",
-                            'web_port': 7860,
-                            'synth_port': 9880
-                        }
-                    else:
-                        server_data = {
-                            'address': '127.0.0.1',
-                            'web_port': 7860,
-                            'synth_port': 9880
-                        }
+                    # 用户取消了选择，不自动填写地址
+                    self._restore_scan_button(button)
+                    return
             
-            # 更新界面配置
-            self._update_server_config(server_data, button)
+            # 更新界面配置（只有在有server_data时才更新）
+            if 'server_data' in locals():
+                self._update_server_config(server_data, button)
+            else:
+                self._restore_scan_button(button)
             
         except Exception as e:
             wx.MessageBox(f"处理搜索结果失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            self._restore_scan_button(button)
     
     def _let_user_choose_server(self, servers: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """让用户选择服务器（在主线程中调用）"""
@@ -516,8 +490,6 @@ class ConfigDialog(wx.Dialog):
             
             if hasattr(self, 'synth_port_text'):
                 self.synth_port_text.SetValue(str(server_data['synth_port']))
-            
-            wx.MessageBox("找到服务器并自动填充配置", "成功", wx.OK | wx.ICON_INFORMATION)
             
         except Exception as e:
             wx.MessageBox(f"更新配置失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
